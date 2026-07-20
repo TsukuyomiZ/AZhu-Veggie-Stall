@@ -1,0 +1,1169 @@
+/* ==========================================================================
+   阿珠菜攤 — 設計系統 globals.css
+   Mobile-first(375–430px 為主)、年長者友善:大字、大觸控目標、高對比
+   詳細使用方式請看專案根目錄 DESIGN.md
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. CSS Reset
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+/* --------------------------------------------------------------------------
+   2. Design Tokens(CSS Variables)
+   -------------------------------------------------------------------------- */
+:root {
+  /* 色彩 — 蔬菜攤綠色系 */
+  --green-700: #2b8a3e; /* 主色(按下/深色) */
+  --green-600: #2f9e44; /* 主色(品牌綠,同 themeColor) */
+  --green-500: #40c057;
+  --green-100: #d3f9d8; /* 淺綠底(已完成、成功) */
+  --green-50: #ebfbee;
+
+  --red-700: #c92a2a; /* 危險按下 */
+  --red-600: #e03131; /* 危險/刪除 */
+  --red-50: #fff5f5;
+
+  --amber-700: #9a6700; /* 警告文字(未備) */
+  --amber-100: #fff3bf; /* 警告底 */
+
+  --bg: #f4f7f2;        /* 頁面底色:帶綠的暖白 */
+  --surface: #ffffff;   /* 卡片底色 */
+  --text: #1e2b20;      /* 主要文字(近黑綠) */
+  --text-muted: #4d5c50; /* 次要文字(對比仍 > 4.5:1) */
+  --border: #dbe4d9;    /* 卡片/欄位邊框 */
+  --border-strong: #b7c6b6;
+
+  /* 字級 — 年長者友善,基礎 17px */
+  --fs-sm: 15px;
+  --fs-base: 17px;
+  --fs-lg: 19px;
+  --fs-xl: 22px;   /* 頁面標題 */
+  --fs-num: 28px;  /* 重要數字 */
+  --fs-num-lg: 34px; /* 摘要大數字 */
+
+  /* 圓角 */
+  --radius-sm: 10px;
+  --radius: 14px;   /* 卡片、按鈕 */
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  /* 陰影 */
+  --shadow-sm: 0 1px 2px rgba(30, 43, 32, 0.06);
+  --shadow: 0 2px 8px rgba(30, 43, 32, 0.08);
+  --shadow-lg: 0 6px 20px rgba(30, 43, 32, 0.14);
+  --shadow-fab: 0 4px 12px rgba(47, 158, 68, 0.4);
+
+  /* 間距 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* 觸控目標 */
+  --tap-min: 48px;
+  --tap-lg: 56px;
+
+  /* 底部導覽列 */
+  --nav-height: 66px;
+
+  /* z-index 階層 */
+  --z-sticky: 10;
+  --z-nav: 50;
+}
+
+/* --------------------------------------------------------------------------
+   3. 全域字型與底色(系統字型堆疊,無外部字型)
+   -------------------------------------------------------------------------- */
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang TC", "Heiti TC", "Microsoft JhengHei",
+    "Noto Sans TC", "Noto Sans CJK TC",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--fs-base);
+  color: var(--text);
+  background-color: var(--bg);
+}
+
+/* 鍵盤操作的焦點框(高可見度) */
+:focus-visible {
+  outline: 3px solid var(--green-600);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* 尊重減少動態偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. 頁面容器與頁首
+   -------------------------------------------------------------------------- */
+/* 每頁最外層容器:置中、留出底部導覽列 + iOS 安全區空間 */
+.page {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  padding-bottom: calc(var(--nav-height) + var(--space-6) + env(safe-area-inset-bottom, 0px));
+}
+
+/* 頁首標題列:標題在左,動作按鈕在右 */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+.page-title {
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.page-subtitle {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   5. 卡片
+   -------------------------------------------------------------------------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+}
+
+/* 可點擊卡片(整張連到編輯頁等) */
+.card-tappable {
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-tappable:active {
+  background-color: var(--green-50);
+}
+
+/* 卡片直向清單:卡片之間留距 */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* 左右對齊列(卡片內常用:名稱在左、金額在右) */
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* 卡片內分隔線 */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-3) 0;
+}
+
+/* 金額 / 重要數字 */
+.amount {
+  font-size: var(--fs-num);
+  font-weight: 800;
+  color: var(--green-700);
+  font-variant-numeric: tabular-nums;
+}
+
+.amount-sm {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--green-700);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 訂單卡內的品項小列(名稱 x 數量) */
+.item-line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--fs-base);
+  color: var(--text-muted);
+  padding: var(--space-1) 0;
+}
+
+/* --------------------------------------------------------------------------
+   6. 日期群組標題
+   -------------------------------------------------------------------------- */
+.group-title {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--bg);
+  padding: var(--space-3) 0 var(--space-2);
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  color: var(--green-700);
+}
+
+/* 群組標題右側的小計數(例:3 筆) */
+.group-count {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* 一個日期群組區塊 */
+.date-group {
+  margin-bottom: var(--space-5);
+}
+
+/* --------------------------------------------------------------------------
+   7. 按鈕(大尺寸、48px 以上)
+   -------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  padding: 0 var(--space-5);
+  border-radius: var(--radius);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 主要按鈕(綠) */
+.btn-primary {
+  background: var(--green-600);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+  background: var(--green-700);
+}
+
+.btn-primary:active {
+  background: var(--green-700);
+  box-shadow: none;
+}
+
+/* 危險按鈕(紅,刪除用) */
+.btn-danger {
+  background: var(--red-600);
+  color: #ffffff;
+}
+
+.btn-danger:hover,
+.btn-danger:active {
+  background: var(--red-700);
+}
+
+/* 次要 / 幽靈按鈕(白底綠框) */
+.btn-ghost {
+  background: var(--surface);
+  color: var(--green-700);
+  border-color: var(--border-strong);
+}
+
+.btn-ghost:hover,
+.btn-ghost:active {
+  background: var(--green-50);
+  border-color: var(--green-600);
+}
+
+/* 幽靈危險(白底紅字,列內小刪除) */
+.btn-ghost-danger {
+  background: var(--surface);
+  color: var(--red-600);
+  border-color: var(--border-strong);
+}
+
+.btn-ghost-danger:hover,
+.btn-ghost-danger:active {
+  background: var(--red-50);
+  border-color: var(--red-600);
+}
+
+/* 整行滿版按鈕(表單送出) */
+.btn-block {
+  display: flex;
+  width: 100%;
+  min-height: var(--tap-lg);
+  font-size: var(--fs-lg);
+}
+
+/* 按鈕列:兩顆並排(取消 + 儲存) */
+.btn-row {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.btn-row > .btn {
+  flex: 1;
+  min-height: var(--tap-lg);
+}
+
+/* 正方形圖示按鈕(動態品項列的刪除) */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  min-width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  border-radius: var(--radius);
+  font-size: var(--fs-lg);
+}
+
+/* --------------------------------------------------------------------------
+   8. 表單
+   -------------------------------------------------------------------------- */
+/* 一個欄位 = label + 控制項 */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.field-label {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* 文字輸入 / 下拉 / 多行:字體 16px 以上,避免 iOS 聚焦縮放 */
+.input,
+.select,
+.textarea {
+  width: 100%;
+  min-height: var(--tap-lg);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-base); /* 17px,> 16px 安全 */
+  color: var(--text);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius);
+  transition: border-color 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: #7c8a7e;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--green-600);
+  box-shadow: 0 0 0 3px var(--green-100);
+}
+
+/* select 自訂下拉箭頭 */
+.select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%234d5c50' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-4) center;
+  padding-right: 48px;
+}
+
+.textarea {
+  min-height: 96px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+/* 錯誤狀態 */
+.input-error,
+.input-error:focus {
+  border-color: var(--red-600);
+  box-shadow: 0 0 0 3px var(--red-50);
+}
+
+.field-error {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--red-700);
+}
+
+/* 欄位提示文字 */
+.field-hint {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* 兩欄並排(數量 + 單價) */
+.form-row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.form-row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 動態品項列:品名 + 數量 + 單價 + 刪除鈕,同一列 */
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.item-row .input {
+  min-width: 0;
+}
+
+.item-row-name {
+  flex: 2.2;
+}
+
+.item-row-qty,
+.item-row-price {
+  flex: 1;
+  text-align: center;
+}
+
+/* 表單底部總計列 */
+.total-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.total-bar-label {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   9. Checklist(今日備貨)
+   -------------------------------------------------------------------------- */
+/* 一列 = 一個 <label> 包住隱藏 checkbox,整列可點 */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.check-row:active {
+  background: var(--green-50);
+}
+
+/* 隱藏原生 checkbox,但保留可及性 */
+.check-row input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+/* 大型自訂勾選框 */
+.check-box {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.check-box svg {
+  width: 22px;
+  height: 22px;
+  stroke: #ffffff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* 勾選後:綠底白勾、列變淺綠、文字劃線 */
+.check-row input:checked + .check-box {
+  background: var(--green-600);
+  border-color: var(--green-600);
+}
+
+.check-row input:checked + .check-box svg {
+  opacity: 1;
+}
+
+.check-row input:focus-visible + .check-box {
+  outline: 3px solid var(--green-600);
+  outline-offset: 2px;
+}
+
+.check-row:has(input:checked) {
+  background: var(--green-50);
+  border-color: var(--green-100);
+}
+
+.check-row:has(input:checked) .check-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* 品名(大字) */
+.check-name {
+  flex: 1;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  min-width: 0;
+}
+
+/* 數量(右側大數字) */
+.check-qty {
+  flex: none;
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  color: var(--green-700);
+  font-variant-numeric: tabular-nums;
+}
+
+/* checklist 群組(客戶或分類)之間 */
+.check-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+/* --------------------------------------------------------------------------
+   10. 摘要卡與進度條(今日備貨頁頂部)
+   -------------------------------------------------------------------------- */
+.summary-card {
+  background: linear-gradient(135deg, var(--green-600), var(--green-700));
+  color: #ffffff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.summary-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  opacity: 0.95;
+  margin-bottom: var(--space-3);
+}
+
+/* 數字橫排:已備 / 未備 / 總計 */
+.summary-nums {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.summary-num {
+  flex: 1;
+  text-align: center;
+}
+
+.summary-num + .summary-num {
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.summary-num-value {
+  font-size: var(--fs-num-lg);
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-num-label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* 進度條(白底軌道 + 白色進度) */
+.progress {
+  width: 100%;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: var(--space-4);
+}
+
+.progress-bar {
+  height: 100%;
+  background: #ffffff;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+/* 淺色版本(白卡片內使用) */
+.progress-light {
+  background: var(--green-100);
+}
+
+.progress-light .progress-bar,
+.progress-bar-green {
+  background: var(--green-600);
+}
+
+/* --------------------------------------------------------------------------
+   11. Badge
+   -------------------------------------------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.badge-green {
+  background: var(--green-100);
+  color: var(--green-700);
+}
+
+.badge-amber {
+  background: var(--amber-100);
+  color: var(--amber-700);
+}
+
+.badge-red {
+  background: var(--red-50);
+  color: var(--red-700);
+}
+
+.badge-gray {
+  background: #e9ede8;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   12. 空狀態
+   -------------------------------------------------------------------------- */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  text-align: center;
+  padding: var(--space-8) var(--space-5);
+  color: var(--text-muted);
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--border-strong);
+}
+
+.empty-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.empty-text {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.empty-hint {
+  font-size: var(--fs-base);
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   13. 底部導覽列
+   -------------------------------------------------------------------------- */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-nav);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgba(30, 43, 32, 0.08);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bottom-nav-inner {
+  max-width: 480px;
+  margin: 0 auto;
+  height: var(--nav-height);
+  display: flex;
+  align-items: stretch;
+}
+
+/* 一般導覽項目 */
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--tap-min);
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-item svg {
+  width: 26px;
+  height: 26px;
+}
+
+.nav-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.nav-item.active {
+  color: var(--green-700);
+}
+
+/* 中間突出的大圓形新增按鈕 */
+.nav-fab-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.nav-fab {
+  position: absolute;
+  top: -24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-full);
+  background: var(--green-600);
+  color: #ffffff;
+  box-shadow: var(--shadow-fab);
+  border: 4px solid var(--bg);
+  transition: background-color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-fab svg {
+  width: 30px;
+  height: 30px;
+}
+
+.nav-fab:active,
+.nav-fab.active {
+  background: var(--green-700);
+}
+
+/* FAB 底下的文字 */
+.nav-fab-label {
+  position: absolute;
+  bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.nav-fab-wrap.active .nav-fab-label {
+  color: var(--green-700);
+}
+
+/* --------------------------------------------------------------------------
+   14. 小工具 class
+   -------------------------------------------------------------------------- */
+.stack-2 { display: flex; flex-direction: column; gap: var(--space-2); }
+.stack-4 { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.mt-2 { margin-top: var(--space-2); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-6 { margin-top: var(--space-6); }
+
+.text-muted { color: var(--text-muted); }
+.text-sm { font-size: var(--fs-sm); }
+.text-center { text-align: center; }
+.font-bold { font-weight: 700; }
+
+/* --------------------------------------------------------------------------
+   15. 訂單單據(匯出 PDF 用)
+   -------------------------------------------------------------------------- */
+.receipt {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+}
+
+.receipt-header {
+  text-align: center;
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--green-600);
+}
+
+.receipt-brand {
+  font-size: var(--fs-num);
+  font-weight: 800;
+  color: var(--green-700);
+}
+
+.receipt-doc-title {
+  margin-top: 4px;
+  font-size: var(--fs-base);
+  letter-spacing: 8px;
+  text-indent: 8px; /* 抵銷最後一字的 letter-spacing，保持置中 */
+  color: var(--text-muted);
+}
+
+.receipt-meta {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.receipt-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+.receipt-meta-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.receipt-meta-value {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  text-align: right;
+}
+
+.receipt-table {
+  width: 100%;
+  margin-top: var(--space-4);
+  border-collapse: collapse;
+  font-size: var(--fs-base);
+}
+
+.receipt-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.receipt-table td {
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--border);
+  word-break: break-word;
+}
+
+.receipt-table .receipt-col-qty {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.receipt-table .receipt-col-amount {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-total {
+  margin-top: var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.receipt-total-amount {
+  font-size: var(--fs-num);
+  font-weight: 800;
+  color: var(--green-700);
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-footer {
+  margin-top: var(--space-6);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* --------------------------------------------------------------------------
+   16. 銷量統計
+   -------------------------------------------------------------------------- */
+/* 週/月/季切換 */
+.segmented {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
+.segmented-btn {
+  flex: 1;
+  min-height: 48px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--text-muted);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segmented-btn.active {
+  background: var(--green-600);
+  color: #fff;
+}
+
+.stats-card-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+.stats-summary-text {
+  font-size: var(--fs-base);
+  line-height: 1.7;
+}
+
+/* SVG 長條圖 */
+.barchart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.barchart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.barchart-axis {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.barchart-bar {
+  fill: var(--green-500);
+}
+
+.barchart-bar.now {
+  fill: var(--green-700);
+}
+
+.barchart-bar.selected {
+  fill: var(--green-700);
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.barchart-value {
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--text);
+}
+
+.barchart-tick {
+  font-size: 11px;
+  fill: var(--text-muted);
+}
+
+.barchart-tick.now {
+  fill: var(--green-700);
+  font-weight: 700;
+}
+
+.stats-chart-note {
+  margin-top: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* 品項排行(水平長條) */
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rank-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 6px;
+}
+
+.rank-name {
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.rank-value {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-bar {
+  height: 14px;
+  background: var(--green-50);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.rank-bar-fill {
+  height: 100%;
+  background: var(--green-500);
+  border-radius: var(--radius-full);
+}
+
+.rank-customer {
+  min-height: 44px;
+}
+
+/* --------------------------------------------------------------------------
+   17. 列印(存成 PDF)
+   -------------------------------------------------------------------------- */
+@media print {
+  .no-print,
+  .bottom-nav {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .receipt {
+    border: none;
+    border-radius: 0;
+    padding: 16px 8px;
+  }
+}
+
