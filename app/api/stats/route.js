@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import { isAuthed } from "@/lib/auth";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // GET /api/stats?from=YYYY-MM-DD&to=YYYY-MM-DD&prevFrom=...&prevTo=...
 // 回傳該區間的營收摘要、每日營收、品項排行、客戶排行，以及上一期摘要（供比較）
 export async function GET(req) {
+  if (!(await isAuthed())) {
+    return NextResponse.json({ error: "請先登入" }, { status: 401 });
+  }
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from") || "";
   const to = searchParams.get("to") || "";

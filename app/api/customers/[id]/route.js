@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
+import { isAuthed } from "@/lib/auth";
 
 function toObjectId(id) {
   try {
@@ -11,6 +12,9 @@ function toObjectId(id) {
 }
 
 export async function PUT(req, { params }) {
+  if (!(await isAuthed())) {
+    return NextResponse.json({ error: "請先登入" }, { status: 401 });
+  }
   const { id } = await params;
   const _id = toObjectId(id);
   if (!_id) return NextResponse.json({ error: "無效的 id" }, { status: 400 });
@@ -36,6 +40,9 @@ export async function PUT(req, { params }) {
 }
 
 export async function DELETE(req, { params }) {
+  if (!(await isAuthed())) {
+    return NextResponse.json({ error: "請先登入" }, { status: 401 });
+  }
   const { id } = await params;
   const _id = toObjectId(id);
   if (!_id) return NextResponse.json({ error: "無效的 id" }, { status: 400 });

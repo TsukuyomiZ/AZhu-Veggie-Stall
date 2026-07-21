@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import { isAuthed } from "@/lib/auth";
 
 function normalizeItems(items) {
   return (items || [])
@@ -20,6 +21,10 @@ export async function GET(req) {
   if (date !== null && !date.trim()) {
     return NextResponse.json({ error: "日期不可為空" }, { status: 400 });
   }
+  // 訪客(未登入)只能查「單日」訂單給備貨頁用；完整訂單列表要登入
+  if (!date && !(await isAuthed())) {
+    return NextResponse.json({ error: "請先登入" }, { status: 401 });
+  }
   const query = date ? { date } : {};
   const orders = await db
     .collection("orders")
@@ -31,6 +36,9 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
+  if (!(await isAuthed())) {
+    return NextResponse.json({ error: "請先登入" }, { status: 401 });
+  }
   const body = await req.json();
   const items = normalizeItems(body.items);
   if (!body.customerId) {

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import { isAuthed } from "@/lib/auth";
 
 export async function GET() {
+  if (!(await isAuthed())) {
+    return NextResponse.json({ error: "請先登入" }, { status: 401 });
+  }
   const db = await getDb();
   const customers = await db
     .collection("customers")
@@ -12,6 +16,9 @@ export async function GET() {
 }
 
 export async function POST(req) {
+  if (!(await isAuthed())) {
+    return NextResponse.json({ error: "請先登入" }, { status: 401 });
+  }
   const body = await req.json();
   const name = (body.name || "").trim();
   if (!name) {

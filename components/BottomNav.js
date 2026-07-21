@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -95,14 +96,75 @@ function ChartIcon() {
   );
 }
 
+function LockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
 export default function BottomNav() {
   const pathname = usePathname();
+  const [authed, setAuthed] = useState(null); // null = 確認中
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((d) => {
+        if (!cancelled) setAuthed(!!d.authed);
+      })
+      .catch(() => {
+        if (!cancelled) setAuthed(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const isHome = pathname === "/";
   const isNew = pathname === "/orders/new";
   const isOrders = pathname.startsWith("/orders") && !isNew;
   const isCustomers = pathname.startsWith("/customers");
   const isStats = pathname.startsWith("/stats");
+  const isLogin = pathname.startsWith("/login");
+
+  // 未登入(或確認中):只顯示「今日備貨」和「登入」
+  if (authed !== true) {
+    return (
+      <nav className="bottom-nav" aria-label="主導覽">
+        <div className="bottom-nav-inner">
+          <Link
+            href="/"
+            className={`nav-item${isHome ? " active" : ""}`}
+            aria-current={isHome ? "page" : undefined}
+          >
+            <ClipboardIcon />
+            <span className="nav-label">今日備貨</span>
+          </Link>
+
+          <Link
+            href="/login"
+            className={`nav-item${isLogin ? " active" : ""}`}
+            aria-current={isLogin ? "page" : undefined}
+          >
+            <LockIcon />
+            <span className="nav-label">登入</span>
+          </Link>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="bottom-nav" aria-label="主導覽">
