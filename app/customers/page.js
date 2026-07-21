@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const EMPTY_FORM = { name: "", phone: "", address: "", note: "" };
+const EMPTY_FORM = { name: "", phone: "", plate: "", address: "", note: "" };
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -46,6 +46,7 @@ export default function CustomersPage() {
     setForm({
       name: c.name || "",
       phone: c.phone || "",
+      plate: c.plate || "",
       address: c.address || "",
       note: c.note || "",
     });
@@ -83,6 +84,7 @@ export default function CustomersPage() {
           body: JSON.stringify({
             name: form.name.trim(),
             phone: form.phone.trim(),
+            plate: form.plate.trim(),
             address: form.address.trim(),
             note: form.note.trim(),
           }),
@@ -139,6 +141,20 @@ export default function CustomersPage() {
             type="tel"
             value={form.phone}
             onChange={(e) => setField("phone", e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label className="field-label" htmlFor="customer-plate">
+            車牌
+          </label>
+          <input
+            className="input"
+            id="customer-plate"
+            type="text"
+            autoCapitalize="characters"
+            placeholder="例:ABC-1234"
+            value={form.plate}
+            onChange={(e) => setField("plate", e.target.value.toUpperCase())}
           />
         </div>
         <div className="field">
@@ -250,6 +266,11 @@ export default function CustomersPage() {
                       style={{ fontSize: "var(--fs-lg)" }}
                     >
                       {c.name}
+                      {c.plate && (
+                        <span className="badge badge-gray" style={{ marginLeft: 8 }}>
+                          {c.plate}
+                        </span>
+                      )}
                     </div>
                     {c.phone && (
                       <div className="text-muted text-sm">

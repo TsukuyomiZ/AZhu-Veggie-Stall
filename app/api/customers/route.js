@@ -28,6 +28,7 @@ export async function POST(req) {
   const doc = {
     name,
     phone: (body.phone || "").trim(),
+    plate: (body.plate || "").trim(),
     address: (body.address || "").trim(),
     note: (body.note || "").trim(),
     createdAt: new Date(),

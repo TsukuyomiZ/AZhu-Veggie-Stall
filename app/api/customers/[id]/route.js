@@ -28,6 +28,7 @@ export async function PUT(req, { params }) {
   const update = {
     name,
     phone: (body.phone || "").trim(),
+    plate: (body.plate || "").trim(),
     address: (body.address || "").trim(),
     note: (body.note || "").trim(),
   };
