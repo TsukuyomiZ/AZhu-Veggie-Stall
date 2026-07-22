@@ -4,6 +4,28 @@ import { useEffect, useState } from "react";
 
 const EMPTY_FORM = { name: "", phone: "", plate: "", address: "", note: "" };
 
+// 解析一行匯入文字：第一段是姓名，其餘依格式自動判斷電話/車牌，剩下併成地址
+// 分隔符支援空格、逗號、頓號、Tab
+function parseImportLine(line) {
+  const tokens = line.trim().split(/[\s,，、\t]+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  const [first, ...rest] = tokens;
+  const row = { name: first, phone: "", plate: "", address: "" };
+  const addressParts = [];
+  for (const t of rest) {
+    const digits = t.replace(/-/g, "");
+    if (!row.phone && /^0\d{8,9}$/.test(digits)) {
+      row.phone = t;
+    } else if (!row.plate && /^(?=.*[A-Za-z])[A-Za-z0-9-]+$/.test(t)) {
+      row.plate = t.toUpperCase();
+    } else {
+      addressParts.push(t);
+    }
+  }
+  row.address = addressParts.join(" ");
+  return row;
+}
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,6 +37,14 @@ export default function CustomersPage() {
   const [nameError, setNameError] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // 批次匯入
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importPreview, setImportPreview] = useState(null); // null = 還沒解析
+  const [importBusy, setImportBusy] = useState(false);
+  const [importProgress, setImportProgress] = useState("");
+  const [importResult, setImportResult] = useState("");
 
   async function fetchCustomers() {
     try {
@@ -115,6 +145,136 @@ export default function CustomersPage() {
     }
   }
 
+  function closeImport() {
+    setImportOpen(false);
+    setImportText("");
+    setImportPreview(null);
+    setImportProgress("");
+  }
+
+  function parsePreview() {
+    const rows = importText
+      .split(/\r?\n/)
+      .map(parseImportLine)
+      .filter(Boolean)
+      .map((row) => ({
+        ...row,
+        exists: customers.some((c) => c.name === row.name),
+      }));
+    setImportPreview(rows);
+  }
+
+  async function runImport() {
+    if (!importPreview) return;
+    const rows = importPreview.filter((r) => !r.exists);
+    if (rows.length === 0) return;
+    setImportBusy(true);
+    let ok = 0;
+    const failed = [];
+    for (let i = 0; i < rows.length; i++) {
+      setImportProgress(`匯入中… ${i + 1}/${rows.length}`);
+      try {
+        const res = await fetch("/api/customers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: rows[i].name,
+            phone: rows[i].phone,
+            plate: rows[i].plate,
+            address: rows[i].address,
+            note: "",
+          }),
+        });
+        if (!res.ok) throw new Error();
+        ok++;
+      } catch {
+        failed.push(rows[i].name);
+      }
+    }
+    await fetchCustomers();
+    setImportResult(
+      `成功匯入 ${ok} 位` + (failed.length > 0 ? `,失敗 ${failed.length} 位:${failed.join("、")}` : "")
+    );
+    setImportBusy(false);
+    closeImport();
+  }
+
+  function renderImportPanel() {
+    const newRows = importPreview ? importPreview.filter((r) => !r.exists) : [];
+    return (
+      <div className="card mt-2">
+        {importPreview === null ? (
+          <>
+            <div className="field">
+              <label className="field-label" htmlFor="import-text">
+                貼上名單(一行一位:姓名 電話 車牌 地址,用空格分開)
+              </label>
+              <textarea
+                className="textarea"
+                id="import-text"
+                rows={6}
+                placeholder={"王媽媽 0912345678 ABC-1234\n李阿姨 0922333444 中山路10號\n陳老闆"}
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+              />
+            </div>
+            <div className="btn-row mt-2">
+              <button type="button" className="btn btn-ghost" onClick={closeImport}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!importText.trim()}
+                onClick={parsePreview}
+              >
+                解析預覽
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="font-bold">
+              解析出 {importPreview.length} 位
+              {importPreview.length - newRows.length > 0 &&
+                `,其中 ${importPreview.length - newRows.length} 位已存在(會跳過)`}
+            </p>
+            <div className="mt-2">
+              {importPreview.map((r, i) => (
+                <div className="import-row" key={i}>
+                  <span className={r.exists ? "text-muted" : "font-bold"}>{r.name}</span>
+                  <span className="import-row-sub">
+                    {[r.phone, r.plate, r.address].filter(Boolean).join(" · ") || "只有姓名"}
+                  </span>
+                  {r.exists && <span className="badge badge-gray">已存在</span>}
+                </div>
+              ))}
+            </div>
+            {importProgress && <p className="text-muted text-sm mt-2">{importProgress}</p>}
+            <div className="btn-row mt-4">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={importBusy}
+                onClick={() => setImportPreview(null)}
+              >
+                返回修改
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={importBusy || newRows.length === 0}
+                onClick={runImport}
+              >
+                {importBusy ? "匯入中…" : `確認匯入 ${newRows.length} 位`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   function renderForm() {
     return (
       <form className="card" onSubmit={handleSave}>
@@ -213,6 +373,23 @@ export default function CustomersPage() {
           + 新增客戶
         </button>
       </header>
+
+      {editing !== "new" && !importOpen && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-block mt-2"
+          onClick={() => {
+            setImportOpen(true);
+            setImportResult("");
+          }}
+        >
+          批次匯入(貼上名單)
+        </button>
+      )}
+
+      {importResult && <p className="field-hint text-center mt-2">{importResult}</p>}
+
+      {importOpen && renderImportPanel()}
 
       {editing === "new" && <div className="mt-2">{renderForm()}</div>}
 

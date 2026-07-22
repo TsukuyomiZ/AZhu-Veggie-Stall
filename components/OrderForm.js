@@ -54,6 +54,8 @@ export default function OrderForm({ initial = null }) {
   const [customerId, setCustomerId] = useState(initial ? initial.customerId : "");
   const [customerQuery, setCustomerQuery] = useState(initial ? initial.customerName || "" : "");
   const [showCustomerList, setShowCustomerList] = useState(false);
+  const [quickAdding, setQuickAdding] = useState(false);
+  const [quickAddError, setQuickAddError] = useState("");
   const [date, setDate] = useState(initial ? initial.date : tomorrowLocal());
   const [items, setItems] = useState(
     initial && Array.isArray(initial.items) && initial.items.length > 0
@@ -142,6 +144,32 @@ export default function OrderForm({ initial = null }) {
     setCustomerQuery("");
     setLastOrder(null);
     setShowCustomerList(true);
+  }
+
+  // 搜尋不到時，用輸入的名字一鍵建立新客戶並直接選取（不中斷開單流程）
+  async function quickAddCustomer() {
+    const name = customerQuery.trim();
+    if (!name || quickAdding) return;
+    setQuickAdding(true);
+    setQuickAddError("");
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "新增失敗,請稍後再試");
+      setCustomers((prev) =>
+        [...(prev || []), data].sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh-Hant"))
+      );
+      selectCustomer(data);
+    } catch (err) {
+      setQuickAddError(err.message || "新增失敗,請稍後再試");
+      setShowCustomerList(true);
+    } finally {
+      setQuickAdding(false);
+    }
   }
 
   function updateItem(i, field, value) {
@@ -274,7 +302,21 @@ export default function OrderForm({ initial = null }) {
           <div className="combo-list">
             {filteredCustomers.length === 0 ? (
               <div className="combo-empty">
-                找不到「{customerQuery}」，確認名字或先去新增客戶
+                <p>找不到「{customerQuery.trim()}」</p>
+                {customerQuery.trim() && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-block mt-2"
+                    disabled={quickAdding}
+                    onPointerDown={(e) => {
+                      e.preventDefault(); // 搶在 input blur 之前執行
+                      quickAddCustomer();
+                    }}
+                  >
+                    {quickAdding ? "新增中…" : `＋ 直接新增「${customerQuery.trim()}」`}
+                  </button>
+                )}
+                {quickAddError && <p className="field-error mt-2">{quickAddError}</p>}
               </div>
             ) : (
               filteredCustomers.slice(0, 30).map((c) => (
