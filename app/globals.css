@@ -1142,6 +1142,108 @@ body {
   min-height: 44px;
 }
 
+/* 可搜尋的客戶選單 */
+.combo {
+  position: relative;
+}
+
+.combo .input {
+  padding-right: 76px; /* 留給 ✕ 和 ✓ */
+}
+
+.combo-clear {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  font-size: 18px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.combo-check {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--green-600);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.combo-list {
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  max-height: 264px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(30, 43, 32, 0.1);
+}
+
+.combo-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 52px;
+  padding: 8px var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-base);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.combo-option:last-child {
+  border-bottom: none;
+}
+
+.combo-option:active {
+  background: var(--green-50);
+}
+
+.combo-option-name {
+  font-weight: 700;
+}
+
+.combo-option-sub {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.combo-empty {
+  padding: var(--space-4);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* 訂單表單的「帶入上次訂單」提示卡 */
+.suggest-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.suggest-text {
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.suggest-btn {
+  flex-shrink: 0;
+}
+
 /* --------------------------------------------------------------------------
    17. 列印(存成 PDF)
    -------------------------------------------------------------------------- */

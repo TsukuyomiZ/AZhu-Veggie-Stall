@@ -26,11 +26,15 @@ export async function GET(req) {
     return NextResponse.json({ error: "請先登入" }, { status: 401 });
   }
   const query = date ? { date } : {};
+  // 查某客戶的歷史訂單（例如帶入上次訂單），最新的排前面
+  const customerId = searchParams.get("customerId");
+  if (customerId) query.customerId = customerId;
+  const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 300, 1), 300);
   const orders = await db
     .collection("orders")
     .find(query)
     .sort({ date: -1, createdAt: -1 })
-    .limit(300)
+    .limit(limit)
     .toArray();
   return NextResponse.json(orders);
 }

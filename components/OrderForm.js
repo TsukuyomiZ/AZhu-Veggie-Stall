@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -20,6 +20,21 @@ function emptyRow() {
   return { name: "", qty: "", unit: "", amount: "", prepared: false };
 }
 
+// "2026-07-21" → "7/21"
+function formatShortDate(dateStr) {
+  const parts = (dateStr || "").split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return dateStr || "";
+  return `${parts[1]}/${parts[2]}`;
+}
+
+// 品項摘要：「高麗菜、蔥 等 4 項」
+function itemsSummary(items) {
+  const names = (items || []).map((i) => i.name).filter(Boolean);
+  if (names.length === 0) return "無品項";
+  if (names.length <= 2) return names.join("、");
+  return `${names.slice(0, 2).join("、")} 等 ${names.length} 項`;
+}
+
 function toRow(item) {
   return {
     name: item.name || "",
@@ -37,6 +52,8 @@ export default function OrderForm({ initial = null }) {
   const [customers, setCustomers] = useState(null); // null = 載入中
   const [loadError, setLoadError] = useState("");
   const [customerId, setCustomerId] = useState(initial ? initial.customerId : "");
+  const [customerQuery, setCustomerQuery] = useState(initial ? initial.customerName || "" : "");
+  const [showCustomerList, setShowCustomerList] = useState(false);
   const [date, setDate] = useState(initial ? initial.date : tomorrowLocal());
   const [items, setItems] = useState(
     initial && Array.isArray(initial.items) && initial.items.length > 0
@@ -46,6 +63,41 @@ export default function OrderForm({ initial = null }) {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [lastOrder, setLastOrder] = useState(null); // 選定客戶的上一筆訂單
+
+  // 新增模式下，選了客戶就撈他最近一筆訂單，供一鍵帶入
+  useEffect(() => {
+    if (isEdit || !customerId) {
+      setLastOrder(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/orders?customerId=${encodeURIComponent(customerId)}&limit=1`)
+      .then((res) => {
+        if (!res.ok) throw new Error("bad status");
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled) setLastOrder(Array.isArray(data) && data[0] ? data[0] : null);
+      })
+      .catch(() => {
+        if (!cancelled) setLastOrder(null); // 撈不到就不顯示，不影響開單
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId, isEdit]);
+
+  function applyLastOrder() {
+    if (!lastOrder) return;
+    const hasInput = items.some((row) => row.name.trim() || row.qty || row.amount);
+    if (hasInput && !window.confirm("會覆蓋你目前已填的品項,確定帶入上次訂單嗎?")) {
+      return;
+    }
+    setItems(
+      (lastOrder.items || []).map((it) => ({ ...toRow(it), prepared: false }))
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +119,30 @@ export default function OrderForm({ initial = null }) {
       cancelled = true;
     };
   }, []);
+
+  // 依輸入文字過濾客戶（姓名/電話/車牌都可搜）
+  const filteredCustomers = useMemo(() => {
+    const list = customers || [];
+    const q = customerQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((c) =>
+      [c.name, c.phone, c.plate].some((v) => (v || "").toLowerCase().includes(q))
+    );
+  }, [customers, customerQuery]);
+
+  function selectCustomer(c) {
+    setCustomerId(c._id);
+    setCustomerQuery(c.name);
+    setShowCustomerList(false);
+    setErrors((prev) => ({ ...prev, customer: undefined }));
+  }
+
+  function clearCustomer() {
+    setCustomerId("");
+    setCustomerQuery("");
+    setLastOrder(null);
+    setShowCustomerList(true);
+  }
 
   function updateItem(i, field, value) {
     setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
@@ -90,7 +166,11 @@ export default function OrderForm({ initial = null }) {
     setSubmitError("");
 
     const nextErrors = {};
-    if (!customerId) nextErrors.customer = "請選擇客戶";
+    if (!customerId) {
+      nextErrors.customer = customerQuery.trim()
+        ? "請從清單中點選客戶"
+        : "請選擇客戶";
+    }
     const validItems = items.filter((row) => row.name.trim());
     if (validItems.length === 0) nextErrors.items = "請至少填寫一個品項名稱";
     setErrors(nextErrors);
@@ -162,19 +242,78 @@ export default function OrderForm({ initial = null }) {
 
       <div className="field">
         <label className="field-label" htmlFor="customer">客戶</label>
-        <select
-          className={errors.customer ? "select input-error" : "select"}
-          id="customer"
-          value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
-        >
-          <option value="">請選擇客戶</option>
-          {customers.map((c) => (
-            <option key={c._id} value={c._id}>{c.name}</option>
-          ))}
-        </select>
+        <div className="combo">
+          <input
+            className={errors.customer ? "input input-error" : "input"}
+            id="customer"
+            type="text"
+            placeholder="輸入姓名搜尋（電話、車牌也可以）"
+            autoComplete="off"
+            value={customerQuery}
+            onChange={(e) => {
+              setCustomerQuery(e.target.value);
+              setCustomerId(""); // 改了字就取消原本的選擇，必須重新點選
+              setShowCustomerList(true);
+            }}
+            onFocus={() => setShowCustomerList(true)}
+            onBlur={() => setTimeout(() => setShowCustomerList(false), 150)}
+          />
+          {customerQuery && (
+            <button
+              type="button"
+              className="combo-clear"
+              aria-label="清除客戶"
+              onClick={clearCustomer}
+            >
+              ✕
+            </button>
+          )}
+          {customerId && <span className="combo-check" aria-hidden="true">✓</span>}
+        </div>
+        {showCustomerList && !customerId && (
+          <div className="combo-list">
+            {filteredCustomers.length === 0 ? (
+              <div className="combo-empty">
+                找不到「{customerQuery}」，確認名字或先去新增客戶
+              </div>
+            ) : (
+              filteredCustomers.slice(0, 30).map((c) => (
+                <button
+                  type="button"
+                  className="combo-option"
+                  key={c._id}
+                  onPointerDown={(e) => {
+                    e.preventDefault(); // 搶在 input blur 之前完成選取
+                    selectCustomer(c);
+                  }}
+                >
+                  <span className="combo-option-name">{c.name}</span>
+                  {(c.plate || c.phone) && (
+                    <span className="combo-option-sub">{c.plate || c.phone}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        )}
         {errors.customer && <p className="field-error">{errors.customer}</p>}
       </div>
+
+      {lastOrder && (
+        <div className="suggest-box">
+          <div className="suggest-text">
+            <span className="font-bold">上次訂單</span>
+            <span className="text-muted text-sm">
+              {" "}
+              {formatShortDate(lastOrder.date)} · {itemsSummary(lastOrder.items)} · NT${" "}
+              {(Number(lastOrder.total) || 0).toLocaleString()}
+            </span>
+          </div>
+          <button type="button" className="btn btn-ghost suggest-btn" onClick={applyLastOrder}>
+            帶入
+          </button>
+        </div>
+      )}
 
       <div className="field">
         <label className="field-label" htmlFor="date">訂單日期</label>
