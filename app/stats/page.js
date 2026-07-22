@@ -243,41 +243,29 @@ export default function StatsPage() {
 
   const selectedBar = bars.find((b) => b.key === selectedKey) || null;
 
-  // 與上期比較的文字
-  let compareText = "";
+  // 與上期比較：tone 決定 badge 顏色
+  let compare = null; // { text, tone: "up" | "down" | "flat" | "none" }
   if (data && data.prev) {
     if (data.prev.revenue > 0) {
       const diff = Math.round(((data.summary.revenue - data.prev.revenue) / data.prev.revenue) * 100);
-      if (diff > 0) compareText = `比${range.prevName}成長 ${diff}%`;
-      else if (diff < 0) compareText = `比${range.prevName}減少 ${-diff}%`;
-      else compareText = `與${range.prevName}持平`;
+      if (diff > 0) compare = { text: `比${range.prevName}成長 ${diff}%`, tone: "up" };
+      else if (diff < 0) compare = { text: `比${range.prevName}減少 ${-diff}%`, tone: "down" };
+      else compare = { text: `與${range.prevName}持平`, tone: "flat" };
     } else if (data.summary.revenue > 0) {
-      compareText = `${range.prevName}沒有訂單`;
+      compare = { text: `${range.prevName}沒有訂單`, tone: "none" };
     }
   }
+  const compareBadgeClass =
+    compare?.tone === "up"
+      ? "badge badge-green"
+      : compare?.tone === "down"
+        ? "badge badge-red"
+        : "badge badge-gray";
 
-  // 文字摘要
-  let summaryText = "";
-  if (data && data.summary.orderCount > 0) {
-    const parts = [
-      `${range.thisName}（${range.label}）共 ${data.summary.orderCount} 筆訂單、${
-        data.summary.customerCount
-      } 位客戶，營收 ${money(data.summary.revenue)}`,
-    ];
-    if (compareText) parts.push(compareText);
-    const topItem = data.byItem[0];
-    if (topItem) {
-      const qtyText = topItem.qty ? `共 ${topItem.qty.toLocaleString()} ${topItem.unit}、` : "";
-      parts.push(`賣最好的是「${topItem.name}」（${qtyText}${money(topItem.amount)}）`);
-    }
-    const busiest = bars.reduce((best, b) => (b.revenue > best.revenue ? b : best), bars[0]);
-    if (busiest && busiest.revenue > 0 && period !== "quarter") {
-      parts.push(`營收最高的一天是 ${busiest.detail}，${money(busiest.revenue)}`);
-    }
-    summaryText = parts.join("；") + "。";
-  }
-
-  const maxItemAmount = data && data.byItem.length > 0 ? data.byItem[0].amount : 1;
+  const topItem = data && data.byItem.length > 0 ? data.byItem[0] : null;
+  const busiestBar =
+    bars.length > 0 ? bars.reduce((best, b) => (b.revenue > best.revenue ? b : best), bars[0]) : null;
+  const maxItemAmount = topItem ? topItem.amount : 1;
 
   return (
     <>
@@ -340,15 +328,56 @@ export default function StatsPage() {
                 </div>
               </div>
             </div>
-            {compareText && <span className="badge badge-green mt-2">{compareText}</span>}
+            {compare && <span className={`${compareBadgeClass} mt-2`}>{compare.text}</span>}
           </div>
 
-          {/* 文字摘要 */}
-          {summaryText && (
-            <div className="card">
-              <p className="stats-summary-text">{summaryText}</p>
+          {/* 重點摘要 */}
+          <div className="card">
+            <div className="stat-lines">
+              <div className="stat-line">
+                <span className="stat-line-label">訂單</span>
+                <span className="stat-line-value">
+                  <strong className="stat-em">{data.summary.orderCount}</strong> 筆 ·{" "}
+                  <strong className="stat-em">{data.summary.customerCount}</strong> 位客戶
+                </span>
+              </div>
+              {compare && (
+                <div className="stat-line">
+                  <span className="stat-line-label">趨勢</span>
+                  <span className="stat-line-value">
+                    <span className={compareBadgeClass}>{compare.text}</span>
+                  </span>
+                </div>
+              )}
+              {topItem && (
+                <div className="stat-line">
+                  <span className="stat-line-label">賣最好</span>
+                  <span className="stat-line-value">
+                    <span className="stat-item-name">{topItem.name}</span>
+                    {topItem.qty ? (
+                      <>
+                        {" "}
+                        共 <strong className="stat-em">{topItem.qty.toLocaleString()}</strong>{" "}
+                        {topItem.unit}
+                      </>
+                    ) : null}{" "}
+                    · <strong className="stat-em">{money(topItem.amount)}</strong>
+                  </span>
+                </div>
+              )}
+              {busiestBar && busiestBar.revenue > 0 && (
+                <div className="stat-line">
+                  <span className="stat-line-label">
+                    {period === "quarter" ? "最旺月份" : "最旺的一天"}
+                  </span>
+                  <span className="stat-line-value">
+                    {busiestBar.detail} ·{" "}
+                    <strong className="stat-em">{money(busiestBar.revenue)}</strong>
+                  </span>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* 營收圖表 */}
           <div className="card">
