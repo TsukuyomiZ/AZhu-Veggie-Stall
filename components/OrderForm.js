@@ -6,14 +6,18 @@ import Link from "next/link";
 
 const COMMON_UNITS = ["斤", "公斤", "兩", "把", "顆", "粒", "箱", "袋", "包", "條", "隻"];
 
-// 以本地時區計算「明天」的 YYYY-MM-DD(不要用 toISOString,避免時區偏移)
-function tomorrowLocal() {
+// 以本地時區計算 YYYY-MM-DD(不要用 toISOString,避免時區偏移)
+function localDateStr(offsetDays = 0) {
   const d = new Date();
-  d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + offsetDays);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function tomorrowLocal() {
+  return localDateStr(1);
 }
 
 function emptyRow() {
@@ -56,6 +60,10 @@ export default function OrderForm({ initial = null }) {
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [quickAdding, setQuickAdding] = useState(false);
   const [quickAddError, setQuickAddError] = useState("");
+  const [aiText, setAiText] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiNotice, setAiNotice] = useState("");
   const [date, setDate] = useState(initial ? initial.date : tomorrowLocal());
   const [items, setItems] = useState(
     initial && Array.isArray(initial.items) && initial.items.length > 0
@@ -169,6 +177,52 @@ export default function OrderForm({ initial = null }) {
       setShowCustomerList(true);
     } finally {
       setQuickAdding(false);
+    }
+  }
+
+  // 貼上 LINE 訊息 → AI 解析成品項，填進表單（金額留白由人補）
+  async function handleAiParse() {
+    const text = aiText.trim();
+    if (!text || aiBusy) return;
+    const hasInput = items.some((row) => row.name.trim() || row.qty || row.amount);
+    if (hasInput && !window.confirm("會覆蓋你目前已填的品項,確定用 AI 解析結果填入嗎?")) {
+      return;
+    }
+    setAiBusy(true);
+    setAiError("");
+    setAiNotice("");
+    try {
+      const res = await fetch("/api/ai/parse-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // 帶上手機的「今天」,AI 才能把「明天」「禮拜六」換算成正確日期
+        body: JSON.stringify({ text, today: localDateStr(0) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "解析失敗,請再試一次");
+
+      setItems(
+        data.items.map((it) => ({
+          name: it.name,
+          qty: it.qty ? String(it.qty) : "",
+          unit: it.unit || "",
+          amount: "", // 金額訊息裡通常沒有，由人補
+          prepared: false,
+        }))
+      );
+
+      if (data.date) {
+        setDate(data.date);
+        setAiNotice(
+          `已填入 ${data.items.length} 個品項,日期設為 ${formatShortDate(data.date)},請確認並補上金額`
+        );
+      } else {
+        setAiNotice(`已填入 ${data.items.length} 個品項,請確認並補上金額`);
+      }
+    } catch (err) {
+      setAiError(err.message || "解析失敗,請再試一次");
+    } finally {
+      setAiBusy(false);
     }
   }
 
@@ -368,6 +422,30 @@ export default function OrderForm({ initial = null }) {
         />
       </div>
 
+      <div className="ai-box">
+        <label className="field-label" htmlFor="ai-text">
+          貼上訂單文字,AI 幫你填(LINE 訊息直接貼)
+        </label>
+        <textarea
+          className="textarea"
+          id="ai-text"
+          rows={3}
+          placeholder={"例:阿寶 明天要 高麗菜2顆 蔥三把 小黃瓜一袋"}
+          value={aiText}
+          onChange={(e) => setAiText(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn btn-primary btn-block mt-2"
+          disabled={aiBusy || !aiText.trim()}
+          onClick={handleAiParse}
+        >
+          {aiBusy ? "AI 解析中…" : "AI 解析填入"}
+        </button>
+        {aiError && <p className="field-error mt-2">{aiError}</p>}
+        {aiNotice && <p className="ai-notice mt-2">{aiNotice}</p>}
+      </div>
+
       <div className="field">
         <span className="field-label">品項</span>
         {items.map((row, i) => (
@@ -391,7 +469,7 @@ export default function OrderForm({ initial = null }) {
               onChange={(e) => updateItem(i, "qty", e.target.value)}
             />
             <input
-              className="input item-row-qty"
+              className="input item-row-unit"
               list="unit-options"
               placeholder="單位"
               aria-label={`品項 ${i + 1} 單位`}
