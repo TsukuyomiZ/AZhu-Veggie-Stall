@@ -52,6 +52,8 @@ function toRow(item) {
 export default function OrderForm({ initial = null }) {
   const router = useRouter();
   const isEdit = !!initial;
+  // LINE 自動收單的待確認訂單:確認流程 = 選客戶 + 補金額 → 轉正
+  const isPending = !!(initial && initial.status === "pending");
 
   const [customers, setCustomers] = useState(null); // null = 載入中
   const [loadError, setLoadError] = useState("");
@@ -251,12 +253,20 @@ export default function OrderForm({ initial = null }) {
     if (!customerId) {
       nextErrors.customer = customerQuery.trim()
         ? "請從清單中點選客戶"
-        : "請選擇客戶";
+        : isPending
+          ? "請先選擇客戶"
+          : "請選擇客戶";
     }
     const validItems = items.filter((row) => row.name.trim());
     if (validItems.length === 0) nextErrors.items = "請至少填寫一個品項名稱";
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      // 待確認訂單:客戶欄在表單最上面,送出鈕在最下面,補一個就近提示
+      if (isPending && nextErrors.customer) {
+        setSubmitError("還沒選客戶,請回到上面的「客戶」欄位選擇");
+      }
+      return;
+    }
 
     const selected = (customers || []).find((c) => c._id === customerId);
     const body = {
@@ -271,6 +281,7 @@ export default function OrderForm({ initial = null }) {
         prepared: !!row.prepared,
       })),
     };
+    if (isPending) body.status = "confirmed"; // 待確認 → 轉正;一般訂單不帶 status
 
     setSaving(true);
     try {
@@ -322,8 +333,18 @@ export default function OrderForm({ initial = null }) {
     <form onSubmit={handleSubmit}>
       {loadError && <p className="field-error">{loadError}</p>}
 
-      <div className="field">
+      {isPending && initial.sourceText && (
+        <div className="source-text-card">
+          <p className="source-text-label">客人原始訊息</p>
+          <p className="source-text-body">{initial.sourceText}</p>
+        </div>
+      )}
+
+      <div className={isPending ? "field field-highlight" : "field"}>
         <label className="field-label" htmlFor="customer">客戶</label>
+        {isPending && (
+          <p className="field-hint">LINE 自動收的單,請先選好客戶才能確認</p>
+        )}
         <div className="combo">
           <input
             className={errors.customer ? "input input-error" : "input"}
@@ -524,7 +545,9 @@ export default function OrderForm({ initial = null }) {
           取消
         </button>
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? "儲存中…" : "儲存訂單"}
+          {saving
+            ? isPending ? "確認中…" : "儲存中…"
+            : isPending ? "✓ 確認訂單" : "儲存訂單"}
         </button>
       </div>
     </form>

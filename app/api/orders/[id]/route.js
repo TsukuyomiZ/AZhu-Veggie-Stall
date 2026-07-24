@@ -57,6 +57,7 @@ export async function PUT(req, { params }) {
     return NextResponse.json({ error: "至少需要一個品項" }, { status: 400 });
   }
   const db = await getDb();
+  // 只 $set 指定欄位，LINE 進來的 source / sourceText 不會被蓋掉
   const update = {
     customerId: body.customerId,
     customerName: (body.customerName || "").trim(),
@@ -64,6 +65,21 @@ export async function PUT(req, { params }) {
     items,
     total: items.reduce((sum, i) => sum + i.amount, 0),
   };
+
+  // 確認訂單：只允許 pending → confirmed 這個方向，body 帶其他 status 值一律忽略
+  if (body.status === "confirmed") {
+    if (!body.customerId || !update.customerName) {
+      return NextResponse.json({ error: "請先選擇客戶" }, { status: 400 });
+    }
+    const existing = await db.collection("orders").findOne({ _id });
+    if (!existing) {
+      return NextResponse.json({ error: "找不到訂單" }, { status: 404 });
+    }
+    if (existing.status === "pending") {
+      update.status = "confirmed";
+    }
+  }
+
   await db.collection("orders").updateOne({ _id }, { $set: update });
   return NextResponse.json({ ok: true });
 }
@@ -80,11 +96,12 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ error: "無效的品項索引" }, { status: 400 });
   }
   const db = await getDb();
-  // 條件加上 items.{index} 必須存在，避免越界索引把陣列補成 null
+  // 條件加上 items.{index} 必須存在，避免越界索引把陣列補成 null；
+  // 待確認（pending）訂單還沒轉正，不開放勾備貨
   const result = await db
     .collection("orders")
     .updateOne(
-      { _id, [`items.${index}`]: { $exists: true } },
+      { _id, status: { $ne: "pending" }, [`items.${index}`]: { $exists: true } },
       { $set: { [`items.${index}.prepared`]: !!body.prepared } }
     );
   if (result.matchedCount === 0) {

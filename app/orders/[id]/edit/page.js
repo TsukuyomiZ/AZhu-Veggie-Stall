@@ -45,7 +45,9 @@ export default function EditOrderPage() {
     <>
       <header className="page-header">
         <div>
-          <h1 className="page-title">編輯訂單</h1>
+          <h1 className="page-title">
+            {order && order.status === "pending" ? "確認訂單" : "編輯訂單"}
+          </h1>
         </div>
       </header>
 

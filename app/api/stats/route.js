@@ -23,7 +23,10 @@ export async function GET(req) {
 
   const db = await getDb();
   const orders = db.collection("orders");
-  const match = { date: { $gte: from, $lte: to } };
+  // 統計不含 LINE 進來還沒確認的「待確認」訂單；
+  // 舊訂單沒有 status 欄位＝視同已確認，所以用 $ne 而不是 $eq: "confirmed"
+  const notPending = { status: { $ne: "pending" } };
+  const match = { date: { $gte: from, $lte: to }, ...notPending };
 
   const [summaryArr, byDate, byItem, byCustomer, prevArr] = await Promise.all([
     orders
@@ -73,7 +76,7 @@ export async function GET(req) {
     hasPrev
       ? orders
           .aggregate([
-            { $match: { date: { $gte: prevFrom, $lte: prevTo } } },
+            { $match: { date: { $gte: prevFrom, $lte: prevTo }, ...notPending } },
             { $group: { _id: null, revenue: { $sum: "$total" }, orderCount: { $sum: 1 } } },
           ])
           .toArray()

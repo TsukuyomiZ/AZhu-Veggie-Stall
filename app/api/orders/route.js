@@ -25,7 +25,10 @@ export async function GET(req) {
   if (!date && !(await isAuthed())) {
     return NextResponse.json({ error: "請先登入" }, { status: 401 });
   }
-  const query = date ? { date } : {};
+  // 帶 date 的單日查詢是備貨頁用（訪客可看）：排除 LINE 進來還沒確認的「待確認」訂單。
+  // 舊訂單沒有 status 欄位＝視同已確認，所以用 $ne 而不是 $eq: "confirmed"。
+  // 不帶 date 的完整列表（需登入）照舊回全部（含 pending），前端要顯示待確認區塊。
+  const query = date ? { date, status: { $ne: "pending" } } : {};
   // 查某客戶的歷史訂單（例如帶入上次訂單），最新的排前面
   const customerId = searchParams.get("customerId");
   if (customerId) query.customerId = customerId;

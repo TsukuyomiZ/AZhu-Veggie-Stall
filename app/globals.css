@@ -75,7 +75,10 @@ ol {
   --red-50: #fff5f5;
 
   --amber-700: #9a6700; /* 警告文字(未備) */
+  --amber-500: #f59f00; /* 待確認強調框線 */
+  --amber-300: #ffe066; /* 待確認卡片框線 */
   --amber-100: #fff3bf; /* 警告底 */
+  --amber-50: #fff9db;  /* 待確認淺黃底(客人原始訊息) */
 
   --bg: #f4f7f2;        /* 頁面底色:帶綠的暖白 */
   --surface: #ffffff;   /* 卡片底色 */
@@ -1351,6 +1354,80 @@ body {
 
 .suggest-btn {
   flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   16.5 待確認訂單(LINE 自動收單)
+   -------------------------------------------------------------------------- */
+.pending-section {
+  margin-bottom: var(--space-6);
+}
+
+.pending-section .group-title {
+  color: var(--amber-700);
+}
+
+/* 待確認卡片:琥珀色外框,與一般白卡片區隔 */
+.pending-card {
+  border: 1.5px solid var(--amber-300);
+}
+
+/* 卡片上的「確認訂單」是主動作,刪除縮成輔助按鈕 */
+.pending-card .btn-row .btn-ghost-danger {
+  flex: 0 0 auto;
+}
+
+.badge-pending {
+  background: var(--amber-100);
+  color: var(--amber-700);
+}
+
+/* 客人原始訊息(sourceText)全文卡:淺黃底、保留換行 */
+.source-text-card {
+  background: var(--amber-50);
+  border: 1px solid var(--amber-300);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.source-text-label {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--amber-700);
+  margin-bottom: var(--space-1);
+}
+
+.source-text-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* 訂單列表卡片上的訊息預覽:最多兩行截斷 */
+.source-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* 待確認流程:客戶選擇區高亮(必填的那一步) */
+.field-highlight {
+  border: 2px dashed var(--amber-500);
+  border-radius: var(--radius);
+  background: var(--amber-50);
+  padding: var(--space-3) var(--space-3) var(--space-4);
+}
+
+.field-highlight .field-hint {
+  color: var(--amber-700);
+  font-weight: 700;
 }
 
 /* --------------------------------------------------------------------------

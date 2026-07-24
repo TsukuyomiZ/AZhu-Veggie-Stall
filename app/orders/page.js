@@ -62,7 +62,11 @@ export default function OrdersPage() {
   }, []);
 
   async function handleDelete(order) {
-    const ok = window.confirm(`確定要刪除「${order.customerName}」這筆訂單嗎?`);
+    const ok = window.confirm(
+      order.customerName
+        ? `確定要刪除「${order.customerName}」這筆訂單嗎?`
+        : "確定要刪除這筆待確認訂單嗎?"
+    );
     if (!ok) return;
     setDeletingId(order._id);
     try {
@@ -79,11 +83,15 @@ export default function OrdersPage() {
   const today = localDateStr(0);
   const tomorrow = localDateStr(1);
 
-  // 按日期分組(API 已由新到舊排序,維持原順序)
+  // 待確認訂單(LINE 自動收單)獨立置頂,不進日期分組
+  const pendingOrders = orders ? orders.filter((o) => o.status === "pending") : [];
+
+  // 按日期分組(API 已由新到舊排序,維持原順序;排除待確認)
   const groups = [];
   if (orders) {
     const map = new Map();
     for (const o of orders) {
+      if (o.status === "pending") continue;
       if (!map.has(o.date)) {
         map.set(o.date, { date: o.date, orders: [] });
         groups.push(map.get(o.date));
@@ -118,6 +126,55 @@ export default function OrdersPage() {
           <p className="empty-hint">建立第一筆訂單,開始備貨吧</p>
           <Link href="/orders/new" className="btn btn-primary">新增訂單</Link>
         </div>
+      )}
+
+      {pendingOrders.length > 0 && (
+        <section className="pending-section">
+          <h2 className="group-title">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+              <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+            </svg>
+            待確認
+            <span className="group-count">{pendingOrders.length} 筆</span>
+          </h2>
+          <div className="list">
+            {pendingOrders.map((order) => (
+              <div className="card pending-card" key={order._id}>
+                <div className="row-between">
+                  <span className="font-bold" style={{ fontSize: "var(--fs-lg)" }}>
+                    {formatDateLabel(order.date)} 要貨
+                  </span>
+                  <span style={{ display: "flex", gap: "var(--space-2)" }}>
+                    {order.source === "line" && <span className="badge badge-gray">LINE</span>}
+                    <span className="badge badge-pending">待確認</span>
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <div className="item-line">
+                    <span>{itemSummary(order.items)}</span>
+                  </div>
+                </div>
+                {order.sourceText && (
+                  <p className="source-preview mt-2">{order.sourceText}</p>
+                )}
+                <div className="btn-row mt-2">
+                  <button
+                    type="button"
+                    className="btn btn-ghost-danger"
+                    disabled={deletingId === order._id}
+                    onClick={() => handleDelete(order)}
+                  >
+                    {deletingId === order._id ? "刪除中…" : "刪除"}
+                  </button>
+                  <Link href={`/orders/${order._id}/edit`} className="btn btn-primary">
+                    確認訂單
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {groups.map((group) => {
