@@ -1,5 +1,7 @@
 import OrderForm from "@/components/OrderForm";
+import NewOrderHeader from "./NewOrderHeader";
 
+// metadata 是 server 端靜態產生,無法跟著瀏覽器語言切換,維持中文
 export const metadata = {
   title: "新增訂單 — 阿珠菜攤",
 };
@@ -7,11 +9,7 @@ export const metadata = {
 export default function NewOrderPage() {
   return (
     <>
-      <header className="page-header">
-        <div>
-          <h1 className="page-title">新增訂單</h1>
-        </div>
-      </header>
+      <NewOrderHeader />
       <OrderForm initial={null} />
     </>
   );

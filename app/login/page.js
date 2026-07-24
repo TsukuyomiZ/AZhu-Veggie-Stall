@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n";
+import LangToggle from "@/components/LangToggle";
 
 export default function LoginPage() {
+  const { t } = useI18n();
   const [authed, setAuthed] = useState(null); // null = 確認中
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  // 錯誤存 { key } 或 { text }:key = 前端訊息(render 時 t(),切語言跟著換);
+  // text = 伺服器回的中文錯誤,照原樣顯示不翻
+  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -27,11 +32,11 @@ export default function LoginPage() {
   async function handleLogin(e) {
     e.preventDefault();
     if (!password) {
-      setError("請輸入密碼");
+      setError({ key: "login.enterPassword" });
       return;
     }
     setBusy(true);
-    setError("");
+    setError(null);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -44,9 +49,9 @@ export default function LoginPage() {
         return;
       }
       const data = await res.json().catch(() => ({}));
-      setError(data.error || "登入失敗,請再試一次");
+      setError(data.error ? { text: data.error } : { key: "login.failed" });
     } catch (_) {
-      setError("網路錯誤,請再試一次");
+      setError({ key: "login.networkError" });
     } finally {
       setBusy(false);
     }
@@ -61,20 +66,26 @@ export default function LoginPage() {
     }
   }
 
+  const errorText = error ? (error.key ? t(error.key) : error.text) : "";
+
   return (
     <>
       <header className="page-header">
         <div>
-          <h1 className="page-title">登入</h1>
-          <p className="page-subtitle">阿珠菜攤</p>
+          <h1 className="page-title">{t("nav.login")}</h1>
+          <p className="page-subtitle">{t("app.name")}</p>
         </div>
       </header>
 
-      {authed === null && <p className="text-muted text-center mt-6">確認登入狀態中…</p>}
+      <LangToggle />
+
+      {authed === null && (
+        <p className="text-muted text-center mt-6">{t("auth.checking")}</p>
+      )}
 
       {authed === true && (
         <div className="card mt-4">
-          <p className="text-center">你已經登入了,可以使用全部功能。</p>
+          <p className="text-center">{t("login.alreadyIn")}</p>
           <div className="btn-row mt-4">
             <button
               type="button"
@@ -82,9 +93,9 @@ export default function LoginPage() {
               disabled={busy}
               onClick={handleLogout}
             >
-              登出
+              {t("login.logout")}
             </button>
-            <Link href="/" className="btn btn-primary">回今日備貨</Link>
+            <Link href="/" className="btn btn-primary">{t("login.backToday")}</Link>
           </div>
         </div>
       )}
@@ -93,26 +104,28 @@ export default function LoginPage() {
         <>
           <form className="card mt-4" onSubmit={handleLogin}>
             <div className="field">
-              <label className="field-label" htmlFor="login-password">密碼</label>
+              <label className="field-label" htmlFor="login-password">
+                {t("login.password")}
+              </label>
               <input
                 id="login-password"
-                className={error ? "input input-error" : "input"}
+                className={errorText ? "input input-error" : "input"}
                 type="password"
                 value={password}
                 autoComplete="current-password"
                 onChange={(e) => setPassword(e.target.value)}
               />
-              {error && <p className="field-error">{error}</p>}
+              {errorText && <p className="field-error">{errorText}</p>}
             </div>
             <button type="submit" className="btn btn-primary btn-block mt-4" disabled={busy}>
-              {busy ? "登入中…" : "登入"}
+              {busy ? t("login.loggingIn") : t("nav.login")}
             </button>
           </form>
 
           <div className="text-center mt-6">
-            <p className="text-muted text-sm">沒有密碼嗎?</p>
+            <p className="text-muted text-sm">{t("login.noPassword")}</p>
             <Link href="/" className="btn btn-ghost btn-block mt-2">
-              不登入,只看今日備貨
+              {t("login.guestLink")}
             </Link>
           </div>
         </>

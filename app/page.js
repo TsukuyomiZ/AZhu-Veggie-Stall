@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n";
+import LangToggle from "@/components/LangToggle";
 
 function todayLocal() {
   const d = new Date();
@@ -11,30 +13,31 @@ function todayLocal() {
   return `${y}-${m}-${day}`;
 }
 
-function formatDateLabel(dateStr) {
+function formatDateLabel(dateStr, t) {
   const [y, m, d] = dateStr.split("-").map(Number);
   if (!y || !m || !d) return dateStr;
-  const week = ["日", "一", "二", "三", "四", "五", "六"];
   const w = new Date(y, m - 1, d).getDay();
-  return `${m}月${d}日(星期${week[w]})`;
+  return t("today.dateFormat", { m, d, w: t(`weekday.${w}`) });
 }
 
 export default function Page() {
+  const { t } = useI18n();
   const [date, setDate] = useState(todayLocal);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [patchError, setPatchError] = useState("");
+  // 錯誤存布林,render 時才 t(),切語言時訊息會跟著換
+  const [loadError, setLoadError] = useState(false);
+  const [patchError, setPatchError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const patchErrorTimer = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setLoadError("");
+    setLoadError(false);
     fetch(`/api/orders?date=${date}`)
       .then((res) => {
-        if (!res.ok) throw new Error("載入失敗");
+        if (!res.ok) throw new Error("load failed");
         return res.json();
       })
       .then((data) => {
@@ -44,7 +47,7 @@ export default function Page() {
       })
       .catch(() => {
         if (cancelled) return;
-        setLoadError("載入訂單失敗,請檢查網路後再試一次。");
+        setLoadError(true);
         setLoading(false);
       });
     return () => {
@@ -58,10 +61,10 @@ export default function Page() {
     };
   }, []);
 
-  const showPatchError = useCallback((msg) => {
-    setPatchError(msg);
+  const showPatchError = useCallback(() => {
+    setPatchError(true);
     if (patchErrorTimer.current) clearTimeout(patchErrorTimer.current);
-    patchErrorTimer.current = setTimeout(() => setPatchError(""), 4000);
+    patchErrorTimer.current = setTimeout(() => setPatchError(false), 4000);
   }, []);
 
   const setPrepared = useCallback((orderId, itemIndex, prepared) => {
@@ -88,11 +91,11 @@ export default function Page() {
         body: JSON.stringify({ itemIndex, prepared: nextPrepared }),
       })
         .then((res) => {
-          if (!res.ok) throw new Error("更新失敗");
+          if (!res.ok) throw new Error("update failed");
         })
         .catch(() => {
           setPrepared(orderId, itemIndex, !nextPrepared);
-          showPatchError("勾選沒有存成功,已恢復原狀,請再試一次。");
+          showPatchError();
         });
     },
     [setPrepared, showPatchError]
@@ -145,14 +148,15 @@ export default function Page() {
     <>
       <header className="page-header">
         <div>
-          <h1 className="page-title">今日備貨</h1>
-          <p className="page-subtitle">{formatDateLabel(date)}</p>
+          <h1 className="page-title">{t("nav.today")}</h1>
+          <p className="page-subtitle">{formatDateLabel(date, t)}</p>
         </div>
+        <LangToggle compact />
       </header>
 
       <div className="field">
         <label className="field-label" htmlFor="prep-date">
-          選擇日期
+          {t("today.pickDate")}
         </label>
         <input
           className="input"
@@ -166,19 +170,21 @@ export default function Page() {
         />
       </div>
 
-      {patchError ? <p className="field-error mt-2">{patchError}</p> : null}
+      {patchError ? (
+        <p className="field-error mt-2">{t("today.patchError")}</p>
+      ) : null}
 
       {loading ? (
-        <p className="text-muted text-center mt-6">載入中…</p>
+        <p className="text-muted text-center mt-6">{t("common.loading")}</p>
       ) : loadError ? (
         <div className="empty mt-4">
-          <p className="empty-text">{loadError}</p>
+          <p className="empty-text">{t("today.loadError")}</p>
           <button
             type="button"
             className="btn btn-primary mt-4"
             onClick={() => setReloadKey((k) => k + 1)}
           >
-            重新載入
+            {t("today.reload")}
           </button>
         </div>
       ) : totalRows === 0 ? (
@@ -197,28 +203,30 @@ export default function Page() {
               <path d="M8 11h8" />
             </svg>
           </div>
-          <p className="empty-text">這一天沒有訂單</p>
-          <p className="empty-hint">先新增訂單,才有備貨清單</p>
+          <p className="empty-text">{t("today.emptyTitle")}</p>
+          <p className="empty-hint">{t("today.emptyHint")}</p>
           <Link href="/orders/new" className="btn btn-primary">
-            去新增訂單
+            {t("today.emptyCta")}
           </Link>
         </div>
       ) : (
         <>
           <section className="summary-card mt-4">
-            <p className="summary-title">備貨進度 — 總品項 {totalRows} 項</p>
+            <p className="summary-title">
+              {t("today.progressTitle", { n: totalRows })}
+            </p>
             <div className="summary-nums">
               <div className="summary-num">
                 <div className="summary-num-value">{preparedRows}</div>
-                <div className="summary-num-label">已備</div>
+                <div className="summary-num-label">{t("today.prepared")}</div>
               </div>
               <div className="summary-num">
                 <div className="summary-num-value">{totalRows - preparedRows}</div>
-                <div className="summary-num-label">未備</div>
+                <div className="summary-num-label">{t("today.unprepared")}</div>
               </div>
               <div className="summary-num">
                 <div className="summary-num-value">{totalRows}</div>
-                <div className="summary-num-label">總品項</div>
+                <div className="summary-num-label">{t("today.totalItems")}</div>
               </div>
             </div>
             <div className="progress">
@@ -234,9 +242,15 @@ export default function Page() {
                   <h2 className="group-title">
                     {g.name}
                     <span className="group-count">
-                      已備 {g.preparedQty} / {g.totalQty} {g.unit}
+                      {t("today.groupProgress", {
+                        prepared: g.preparedQty,
+                        total: g.totalQty,
+                        unit: g.unit,
+                      })}
                     </span>
-                    {done ? <span className="badge badge-green">完成</span> : null}
+                    {done ? (
+                      <span className="badge badge-green">{t("today.done")}</span>
+                    ) : null}
                   </h2>
                   <div className="check-group">
                     {g.rows.map((r) => (

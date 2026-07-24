@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useI18n } from "@/lib/i18n";
 
 function ClipboardIcon() {
   return (
@@ -114,6 +115,7 @@ function LockIcon() {
 }
 
 export default function BottomNav() {
+  const { t } = useI18n();
   const pathname = usePathname();
   const [authed, setAuthed] = useState(null); // null = 確認中
 
@@ -142,7 +144,7 @@ export default function BottomNav() {
   // 未登入(或確認中):只顯示「今日備貨」和「登入」
   if (authed !== true) {
     return (
-      <nav className="bottom-nav" aria-label="主導覽">
+      <nav className="bottom-nav" aria-label={t("nav.main")}>
         <div className="bottom-nav-inner">
           <Link
             href="/"
@@ -150,7 +152,7 @@ export default function BottomNav() {
             aria-current={isHome ? "page" : undefined}
           >
             <ClipboardIcon />
-            <span className="nav-label">今日備貨</span>
+            <span className="nav-label">{t("nav.today")}</span>
           </Link>
 
           <Link
@@ -159,7 +161,7 @@ export default function BottomNav() {
             aria-current={isLogin ? "page" : undefined}
           >
             <LockIcon />
-            <span className="nav-label">登入</span>
+            <span className="nav-label">{t("nav.login")}</span>
           </Link>
         </div>
       </nav>
@@ -167,7 +169,7 @@ export default function BottomNav() {
   }
 
   return (
-    <nav className="bottom-nav" aria-label="主導覽">
+    <nav className="bottom-nav" aria-label={t("nav.main")}>
       <div className="bottom-nav-inner">
         <Link
           href="/"
@@ -175,7 +177,7 @@ export default function BottomNav() {
           aria-current={isHome ? "page" : undefined}
         >
           <ClipboardIcon />
-          <span className="nav-label">今日備貨</span>
+          <span className="nav-label">{t("nav.today")}</span>
         </Link>
 
         <Link
@@ -184,19 +186,19 @@ export default function BottomNav() {
           aria-current={isOrders ? "page" : undefined}
         >
           <ReceiptIcon />
-          <span className="nav-label">訂單</span>
+          <span className="nav-label">{t("nav.orders")}</span>
         </Link>
 
         <div className={`nav-fab-wrap${isNew ? " active" : ""}`}>
           <Link
             href="/orders/new"
             className={`nav-fab${isNew ? " active" : ""}`}
-            aria-label="新增訂單"
+            aria-label={t("nav.newOrder")}
             aria-current={isNew ? "page" : undefined}
           >
             <PlusIcon />
           </Link>
-          <span className="nav-fab-label">新增訂單</span>
+          <span className="nav-fab-label">{t("nav.newOrder")}</span>
         </div>
 
         <Link
@@ -205,7 +207,7 @@ export default function BottomNav() {
           aria-current={isCustomers ? "page" : undefined}
         >
           <PeopleIcon />
-          <span className="nav-label">客戶</span>
+          <span className="nav-label">{t("nav.customers")}</span>
         </Link>
 
         <Link
@@ -214,7 +216,7 @@ export default function BottomNav() {
           aria-current={isStats ? "page" : undefined}
         >
           <ChartIcon />
-          <span className="nav-label">統計</span>
+          <span className="nav-label">{t("nav.stats")}</span>
         </Link>
       </div>
     </nav>

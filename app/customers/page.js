@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 const EMPTY_FORM = { name: "", phone: "", plate: "", address: "", note: "" };
 
@@ -27,15 +28,20 @@ function parseImportLine(line) {
 }
 
 export default function CustomersPage() {
+  const { t } = useI18n();
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  // 用 boolean 記錯誤,render 時才 t(),切語言後訊息會跟著換
+  const [loadError, setLoadError] = useState(false);
 
   // editing: null = 沒開表單;"new" = 新增;其他 = 編輯中客戶的 _id
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [nameError, setNameError] = useState("");
-  const [formError, setFormError] = useState("");
+  const [nameError, setNameError] = useState(false);
+  // formError:{ text } = 伺服器原文照樣顯示;{ key } = 前端字典訊息,
+  // render 時才 t(),錯誤顯示期間切語言會跟著換
+  const [formError, setFormError] = useState(null);
   const [saving, setSaving] = useState(false);
 
   // 批次匯入
@@ -43,18 +49,19 @@ export default function CustomersPage() {
   const [importText, setImportText] = useState("");
   const [importPreview, setImportPreview] = useState(null); // null = 還沒解析
   const [importBusy, setImportBusy] = useState(false);
-  const [importProgress, setImportProgress] = useState("");
-  const [importResult, setImportResult] = useState("");
+  // 進度與結果都存結構化資料,render 時才組句(切語言即時更新)
+  const [importProgress, setImportProgress] = useState(null); // { i, total }
+  const [importResult, setImportResult] = useState(null); // { ok, failed: [names] }
 
   async function fetchCustomers() {
     try {
-      setLoadError("");
+      setLoadError(false);
       const res = await fetch("/api/customers");
       if (!res.ok) throw new Error();
       const data = await res.json();
       setCustomers(data);
     } catch {
-      setLoadError("載入客戶資料失敗,請稍後再試");
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -67,7 +74,7 @@ export default function CustomersPage() {
   function openNew() {
     setEditing("new");
     setForm(EMPTY_FORM);
-    setNameError("");
+    setNameError(false);
     setFormError("");
   }
 
@@ -80,26 +87,26 @@ export default function CustomersPage() {
       address: c.address || "",
       note: c.note || "",
     });
-    setNameError("");
+    setNameError(false);
     setFormError("");
   }
 
   function closeForm() {
     setEditing(null);
     setForm(EMPTY_FORM);
-    setNameError("");
+    setNameError(false);
     setFormError("");
   }
 
   function setField(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
-    if (key === "name" && value.trim()) setNameError("");
+    if (key === "name" && value.trim()) setNameError(false);
   }
 
   async function handleSave(e) {
     e.preventDefault();
     if (!form.name.trim()) {
-      setNameError("請輸入姓名");
+      setNameError(true);
       return;
     }
     setSaving(true);
@@ -122,26 +129,29 @@ export default function CustomersPage() {
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "儲存失敗,請稍後再試");
+        // 伺服器有給錯誤訊息就照原樣顯示(不翻譯),沒有才用前端的字典訊息
+        const e = new Error("save-failed");
+        e.info = data.error ? { text: data.error } : { key: "customers.saveFailed" };
+        throw e;
       }
       closeForm();
       await fetchCustomers();
     } catch (err) {
-      setFormError(err.message || "儲存失敗,請稍後再試");
+      setFormError(err.info || { key: "customers.saveFailed" });
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(c) {
-    if (!window.confirm(`確定要刪除 ${c.name} 嗎?`)) return;
+    if (!window.confirm(t("customers.deleteConfirm", { name: c.name }))) return;
     try {
       const res = await fetch(`/api/customers/${c._id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       if (editing === c._id) closeForm();
       await fetchCustomers();
     } catch {
-      window.alert("刪除失敗,請稍後再試");
+      window.alert(t("customers.deleteFailed"));
     }
   }
 
@@ -149,7 +159,7 @@ export default function CustomersPage() {
     setImportOpen(false);
     setImportText("");
     setImportPreview(null);
-    setImportProgress("");
+    setImportProgress(null);
   }
 
   function parsePreview() {
@@ -172,7 +182,7 @@ export default function CustomersPage() {
     let ok = 0;
     const failed = [];
     for (let i = 0; i < rows.length; i++) {
-      setImportProgress(`匯入中… ${i + 1}/${rows.length}`);
+      setImportProgress({ i: i + 1, total: rows.length });
       try {
         const res = await fetch("/api/customers", {
           method: "POST",
@@ -192,9 +202,7 @@ export default function CustomersPage() {
       }
     }
     await fetchCustomers();
-    setImportResult(
-      `成功匯入 ${ok} 位` + (failed.length > 0 ? `,失敗 ${failed.length} 位:${failed.join("、")}` : "")
-    );
+    setImportResult({ ok, failed });
     setImportBusy(false);
     closeImport();
   }
@@ -207,20 +215,20 @@ export default function CustomersPage() {
           <>
             <div className="field">
               <label className="field-label" htmlFor="import-text">
-                貼上名單(一行一位:姓名 電話 車牌 地址,用空格分開)
+                {t("customers.importLabel")}
               </label>
               <textarea
                 className="textarea"
                 id="import-text"
                 rows={6}
-                placeholder={"王媽媽 0912345678 ABC-1234\n李阿姨 0922333444 中山路10號\n陳老闆"}
+                placeholder={t("customers.importPlaceholder")}
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
               />
             </div>
             <div className="btn-row mt-2">
               <button type="button" className="btn btn-ghost" onClick={closeImport}>
-                取消
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -228,29 +236,38 @@ export default function CustomersPage() {
                 disabled={!importText.trim()}
                 onClick={parsePreview}
               >
-                解析預覽
+                {t("customers.parsePreview")}
               </button>
             </div>
           </>
         ) : (
           <>
             <p className="font-bold">
-              解析出 {importPreview.length} 位
+              {t("customers.importParsed", { n: importPreview.length })}
               {importPreview.length - newRows.length > 0 &&
-                `,其中 ${importPreview.length - newRows.length} 位已存在(會跳過)`}
+                t("customers.importParsedDup", {
+                  n: importPreview.length - newRows.length,
+                })}
             </p>
             <div className="mt-2">
               {importPreview.map((r, i) => (
                 <div className="import-row" key={i}>
                   <span className={r.exists ? "text-muted" : "font-bold"}>{r.name}</span>
                   <span className="import-row-sub">
-                    {[r.phone, r.plate, r.address].filter(Boolean).join(" · ") || "只有姓名"}
+                    {[r.phone, r.plate, r.address].filter(Boolean).join(" · ") ||
+                      t("customers.onlyName")}
                   </span>
-                  {r.exists && <span className="badge badge-gray">已存在</span>}
+                  {r.exists && (
+                    <span className="badge badge-gray">{t("customers.existsBadge")}</span>
+                  )}
                 </div>
               ))}
             </div>
-            {importProgress && <p className="text-muted text-sm mt-2">{importProgress}</p>}
+            {importProgress && (
+              <p className="text-muted text-sm mt-2">
+                {t("customers.importProgress", importProgress)}
+              </p>
+            )}
             <div className="btn-row mt-4">
               <button
                 type="button"
@@ -258,7 +275,7 @@ export default function CustomersPage() {
                 disabled={importBusy}
                 onClick={() => setImportPreview(null)}
               >
-                返回修改
+                {t("customers.backEdit")}
               </button>
               <button
                 type="button"
@@ -266,7 +283,9 @@ export default function CustomersPage() {
                 disabled={importBusy || newRows.length === 0}
                 onClick={runImport}
               >
-                {importBusy ? "匯入中…" : `確認匯入 ${newRows.length} 位`}
+                {importBusy
+                  ? t("customers.importing")
+                  : t("customers.confirmImport", { n: newRows.length })}
               </button>
             </div>
           </>
@@ -280,7 +299,7 @@ export default function CustomersPage() {
       <form className="card" onSubmit={handleSave}>
         <div className="field">
           <label className="field-label" htmlFor="customer-name">
-            姓名
+            {t("customers.name")}
           </label>
           <input
             className={nameError ? "input input-error" : "input"}
@@ -289,11 +308,11 @@ export default function CustomersPage() {
             value={form.name}
             onChange={(e) => setField("name", e.target.value)}
           />
-          {nameError && <p className="field-error">{nameError}</p>}
+          {nameError && <p className="field-error">{t("customers.nameRequired")}</p>}
         </div>
         <div className="field">
           <label className="field-label" htmlFor="customer-phone">
-            電話
+            {t("customers.phone")}
           </label>
           <input
             className="input"
@@ -305,21 +324,21 @@ export default function CustomersPage() {
         </div>
         <div className="field">
           <label className="field-label" htmlFor="customer-plate">
-            車牌
+            {t("customers.plate")}
           </label>
           <input
             className="input"
             id="customer-plate"
             type="text"
             autoCapitalize="characters"
-            placeholder="例:ABC-1234"
+            placeholder={t("customers.platePlaceholder")}
             value={form.plate}
             onChange={(e) => setField("plate", e.target.value.toUpperCase())}
           />
         </div>
         <div className="field">
           <label className="field-label" htmlFor="customer-address">
-            地址
+            {t("customers.address")}
           </label>
           <input
             className="input"
@@ -331,7 +350,7 @@ export default function CustomersPage() {
         </div>
         <div className="field">
           <label className="field-label" htmlFor="customer-note">
-            備註
+            {t("customers.note")}
           </label>
           <textarea
             className="textarea"
@@ -340,7 +359,9 @@ export default function CustomersPage() {
             onChange={(e) => setField("note", e.target.value)}
           />
         </div>
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && (
+          <p className="field-error">{formError.text || t(formError.key)}</p>
+        )}
         <div className="btn-row mt-2">
           <button
             type="button"
@@ -348,10 +369,10 @@ export default function CustomersPage() {
             onClick={closeForm}
             disabled={saving}
           >
-            取消
+            {t("common.cancel")}
           </button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? "儲存中…" : "儲存"}
+            {saving ? t("customers.saving") : t("common.save")}
           </button>
         </div>
       </form>
@@ -362,7 +383,7 @@ export default function CustomersPage() {
     <>
       <header className="page-header">
         <div>
-          <h1 className="page-title">客戶</h1>
+          <h1 className="page-title">{t("customers.title")}</h1>
         </div>
         <button
           type="button"
@@ -370,7 +391,7 @@ export default function CustomersPage() {
           onClick={openNew}
           disabled={editing === "new"}
         >
-          + 新增客戶
+          {t("customers.addNew")}
         </button>
       </header>
 
@@ -383,21 +404,31 @@ export default function CustomersPage() {
             setImportResult("");
           }}
         >
-          批次匯入(貼上名單)
+          {t("customers.batchImport")}
         </button>
       )}
 
-      {importResult && <p className="field-hint text-center mt-2">{importResult}</p>}
+      {importResult && (
+        <p className="field-hint text-center mt-2">
+          {t("customers.importSuccess", { n: importResult.ok }) +
+            (importResult.failed.length > 0
+              ? t("customers.importFailedPart", {
+                  n: importResult.failed.length,
+                  names: importResult.failed.join(t("customers.nameSeparator")),
+                })
+              : "")}
+        </p>
+      )}
 
       {importOpen && renderImportPanel()}
 
       {editing === "new" && <div className="mt-2">{renderForm()}</div>}
 
       {loading ? (
-        <p className="text-muted text-center mt-6">載入中…</p>
+        <p className="text-muted text-center mt-6">{t("common.loading")}</p>
       ) : loadError ? (
         <div className="empty">
-          <p className="empty-text">{loadError}</p>
+          <p className="empty-text">{t("customers.loadError")}</p>
           <button
             type="button"
             className="btn btn-primary"
@@ -406,7 +437,7 @@ export default function CustomersPage() {
               fetchCustomers();
             }}
           >
-            重新載入
+            {t("common.retry")}
           </button>
         </div>
       ) : customers.length === 0 && editing !== "new" ? (
@@ -426,8 +457,8 @@ export default function CustomersPage() {
               <path d="M22 11h-6" />
             </svg>
           </div>
-          <p className="empty-text">還沒有客戶,先新增一位吧</p>
-          <p className="empty-hint">按右上角「+ 新增客戶」開始</p>
+          <p className="empty-text">{t("customers.emptyText")}</p>
+          <p className="empty-hint">{t("customers.emptyHint")}</p>
         </div>
       ) : (
         <div className="list mt-4">
@@ -461,14 +492,14 @@ export default function CustomersPage() {
                       className="btn btn-ghost"
                       onClick={() => openEdit(c)}
                     >
-                      編輯
+                      {t("common.edit")}
                     </button>
                     <button
                       type="button"
                       className="btn btn-ghost-danger"
                       onClick={() => handleDelete(c)}
                     >
-                      刪除
+                      {t("common.delete")}
                     </button>
                   </div>
                 </div>

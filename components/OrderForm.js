@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n";
 
+// 單位是資料(隨訂單存進 DB),不翻譯
 const COMMON_UNITS = ["斤", "公斤", "兩", "把", "顆", "粒", "箱", "袋", "包", "條", "隻"];
 
 // 以本地時區計算 YYYY-MM-DD(不要用 toISOString,避免時區偏移)
@@ -24,19 +26,19 @@ function emptyRow() {
   return { name: "", qty: "", unit: "", amount: "", prepared: false };
 }
 
-// "2026-07-21" → "7/21"
-function formatShortDate(dateStr) {
+// "2026-07-21" → zh "7/21" / vi "21/7"(月日順序走字典)
+function formatShortDate(dateStr, t) {
   const parts = (dateStr || "").split("-").map(Number);
   if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return dateStr || "";
-  return `${parts[1]}/${parts[2]}`;
+  return t("date.shortDate", { m: parts[1], d: parts[2] });
 }
 
-// 品項摘要：「高麗菜、蔥 等 4 項」
-function itemsSummary(items) {
+// 品項摘要:「高麗菜、蔥 等 4 項」(品項名是資料不翻,句型走字典)
+function itemsSummary(items, t) {
   const names = (items || []).map((i) => i.name).filter(Boolean);
-  if (names.length === 0) return "無品項";
+  if (names.length === 0) return t("orders.noItems");
   if (names.length <= 2) return names.join("、");
-  return `${names.slice(0, 2).join("、")} 等 ${names.length} 項`;
+  return t("orders.moreItems", { names: names.slice(0, 2).join("、"), n: names.length });
 }
 
 function toRow(item) {
@@ -51,11 +53,14 @@ function toRow(item) {
 
 export default function OrderForm({ initial = null }) {
   const router = useRouter();
+  const { t } = useI18n();
   const isEdit = !!initial;
   // LINE 自動收單的待確認訂單:確認流程 = 選客戶 + 補金額 → 轉正
   const isPending = !!(initial && initial.status === "pending");
 
   const [customers, setCustomers] = useState(null); // null = 載入中
+  // 錯誤/提示 state 一律存「字典 key 或伺服器原文」,render 時才 t():
+  // key 會翻譯、伺服器中文原文查不到 key 會原樣顯示,切語言也即時生效
   const [loadError, setLoadError] = useState("");
   const [customerId, setCustomerId] = useState(initial ? initial.customerId : "");
   const [customerQuery, setCustomerQuery] = useState(initial ? initial.customerName || "" : "");
@@ -65,7 +70,7 @@ export default function OrderForm({ initial = null }) {
   const [aiText, setAiText] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState("");
-  const [aiNotice, setAiNotice] = useState("");
+  const [aiNotice, setAiNotice] = useState(null); // { n, date|null }
   const [date, setDate] = useState(initial ? initial.date : tomorrowLocal());
   const [items, setItems] = useState(
     initial && Array.isArray(initial.items) && initial.items.length > 0
@@ -103,7 +108,7 @@ export default function OrderForm({ initial = null }) {
   function applyLastOrder() {
     if (!lastOrder) return;
     const hasInput = items.some((row) => row.name.trim() || row.qty || row.amount);
-    if (hasInput && !window.confirm("會覆蓋你目前已填的品項,確定帶入上次訂單嗎?")) {
+    if (hasInput && !window.confirm(t("form.overwriteLastOrder"))) {
       return;
     }
     setItems(
@@ -124,7 +129,7 @@ export default function OrderForm({ initial = null }) {
       .catch(() => {
         if (!cancelled) {
           setCustomers([]);
-          setLoadError("客戶名單載入失敗,請重新整理再試");
+          setLoadError("form.customersLoadFailed");
         }
       });
     return () => {
@@ -169,13 +174,14 @@ export default function OrderForm({ initial = null }) {
         body: JSON.stringify({ name }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "新增失敗,請稍後再試");
+      // 伺服器回的 data.error 是中文原文,照原樣顯示;沒有才用字典 key
+      if (!res.ok) throw new Error(data.error || "form.quickAddFailed");
       setCustomers((prev) =>
         [...(prev || []), data].sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh-Hant"))
       );
       selectCustomer(data);
     } catch (err) {
-      setQuickAddError(err.message || "新增失敗,請稍後再試");
+      setQuickAddError(err.message || "form.quickAddFailed");
       setShowCustomerList(true);
     } finally {
       setQuickAdding(false);
@@ -187,12 +193,12 @@ export default function OrderForm({ initial = null }) {
     const text = aiText.trim();
     if (!text || aiBusy) return;
     const hasInput = items.some((row) => row.name.trim() || row.qty || row.amount);
-    if (hasInput && !window.confirm("會覆蓋你目前已填的品項,確定用 AI 解析結果填入嗎?")) {
+    if (hasInput && !window.confirm(t("ai.overwriteConfirm"))) {
       return;
     }
     setAiBusy(true);
     setAiError("");
-    setAiNotice("");
+    setAiNotice(null);
     try {
       const res = await fetch("/api/ai/parse-order", {
         method: "POST",
@@ -201,7 +207,7 @@ export default function OrderForm({ initial = null }) {
         body: JSON.stringify({ text, today: localDateStr(0) }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "解析失敗,請再試一次");
+      if (!res.ok) throw new Error(data.error || "ai.parseFailed");
 
       setItems(
         data.items.map((it) => ({
@@ -215,14 +221,12 @@ export default function OrderForm({ initial = null }) {
 
       if (data.date) {
         setDate(data.date);
-        setAiNotice(
-          `已填入 ${data.items.length} 個品項,日期設為 ${formatShortDate(data.date)},請確認並補上金額`
-        );
+        setAiNotice({ n: data.items.length, date: data.date });
       } else {
-        setAiNotice(`已填入 ${data.items.length} 個品項,請確認並補上金額`);
+        setAiNotice({ n: data.items.length, date: null });
       }
     } catch (err) {
-      setAiError(err.message || "解析失敗,請再試一次");
+      setAiError(err.message || "ai.parseFailed");
     } finally {
       setAiBusy(false);
     }
@@ -252,18 +256,18 @@ export default function OrderForm({ initial = null }) {
     const nextErrors = {};
     if (!customerId) {
       nextErrors.customer = customerQuery.trim()
-        ? "請從清單中點選客戶"
+        ? "form.pickFromList"
         : isPending
-          ? "請先選擇客戶"
-          : "請選擇客戶";
+          ? "form.selectCustomerFirst"
+          : "form.selectCustomer";
     }
     const validItems = items.filter((row) => row.name.trim());
-    if (validItems.length === 0) nextErrors.items = "請至少填寫一個品項名稱";
+    if (validItems.length === 0) nextErrors.items = "form.needItem";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       // 待確認訂單:客戶欄在表單最上面,送出鈕在最下面,補一個就近提示
       if (isPending && nextErrors.customer) {
-        setSubmitError("還沒選客戶,請回到上面的「客戶」欄位選擇");
+        setSubmitError("form.pendingCustomerHint");
       }
       return;
     }
@@ -291,10 +295,10 @@ export default function OrderForm({ initial = null }) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        let msg = "儲存失敗,請稍後再試";
+        let msg = "form.saveFailed";
         try {
           const data = await res.json();
-          if (data && data.error) msg = data.error;
+          if (data && data.error) msg = data.error; // 伺服器中文原文,照原樣顯示
         } catch (_) {}
         setSubmitError(msg);
         setSaving(false);
@@ -302,13 +306,13 @@ export default function OrderForm({ initial = null }) {
       }
       router.push("/orders");
     } catch (_) {
-      setSubmitError("連線失敗,請檢查網路後再試");
+      setSubmitError("form.networkFailed");
       setSaving(false);
     }
   }
 
   if (customers === null) {
-    return <p className="text-muted mt-4">載入客戶名單中…</p>;
+    return <p className="text-muted mt-4">{t("form.loadingCustomers")}</p>;
   }
 
   if (customers.length === 0 && !loadError) {
@@ -322,35 +326,35 @@ export default function OrderForm({ initial = null }) {
             <path d="M22 11h-6" />
           </svg>
         </div>
-        <p className="empty-text">還沒有客戶</p>
-        <p className="empty-hint">要先有客戶,才能建立訂單</p>
-        <Link href="/customers" className="btn btn-primary">先去新增客戶</Link>
+        <p className="empty-text">{t("form.noCustomers")}</p>
+        <p className="empty-hint">{t("form.noCustomersHint")}</p>
+        <Link href="/customers" className="btn btn-primary">{t("form.goAddCustomer")}</Link>
       </div>
     );
   }
 
   return (
     <form onSubmit={handleSubmit}>
-      {loadError && <p className="field-error">{loadError}</p>}
+      {loadError && <p className="field-error">{t(loadError)}</p>}
 
       {isPending && initial.sourceText && (
         <div className="source-text-card">
-          <p className="source-text-label">客人原始訊息</p>
+          <p className="source-text-label">{t("form.sourceLabel")}</p>
           <p className="source-text-body">{initial.sourceText}</p>
         </div>
       )}
 
       <div className={isPending ? "field field-highlight" : "field"}>
-        <label className="field-label" htmlFor="customer">客戶</label>
+        <label className="field-label" htmlFor="customer">{t("form.customer")}</label>
         {isPending && (
-          <p className="field-hint">LINE 自動收的單,請先選好客戶才能確認</p>
+          <p className="field-hint">{t("form.pendingHint")}</p>
         )}
         <div className="combo">
           <input
             className={errors.customer ? "input input-error" : "input"}
             id="customer"
             type="text"
-            placeholder="輸入姓名搜尋（電話、車牌也可以）"
+            placeholder={t("form.customerPlaceholder")}
             autoComplete="off"
             value={customerQuery}
             onChange={(e) => {
@@ -365,7 +369,7 @@ export default function OrderForm({ initial = null }) {
             <button
               type="button"
               className="combo-clear"
-              aria-label="清除客戶"
+              aria-label={t("form.clearCustomer")}
               onClick={clearCustomer}
             >
               ✕
@@ -377,7 +381,7 @@ export default function OrderForm({ initial = null }) {
           <div className="combo-list">
             {filteredCustomers.length === 0 ? (
               <div className="combo-empty">
-                <p>找不到「{customerQuery.trim()}」</p>
+                <p>{t("form.notFound", { q: customerQuery.trim() })}</p>
                 {customerQuery.trim() && (
                   <button
                     type="button"
@@ -388,10 +392,10 @@ export default function OrderForm({ initial = null }) {
                       quickAddCustomer();
                     }}
                   >
-                    {quickAdding ? "新增中…" : `＋ 直接新增「${customerQuery.trim()}」`}
+                    {quickAdding ? t("form.adding") : t("form.quickAdd", { q: customerQuery.trim() })}
                   </button>
                 )}
-                {quickAddError && <p className="field-error mt-2">{quickAddError}</p>}
+                {quickAddError && <p className="field-error mt-2">{t(quickAddError)}</p>}
               </div>
             ) : (
               filteredCustomers.slice(0, 30).map((c) => (
@@ -413,27 +417,27 @@ export default function OrderForm({ initial = null }) {
             )}
           </div>
         )}
-        {errors.customer && <p className="field-error">{errors.customer}</p>}
+        {errors.customer && <p className="field-error">{t(errors.customer)}</p>}
       </div>
 
       {lastOrder && (
         <div className="suggest-box">
           <div className="suggest-text">
-            <span className="font-bold">上次訂單</span>
+            <span className="font-bold">{t("form.lastOrder")}</span>
             <span className="text-muted text-sm">
               {" "}
-              {formatShortDate(lastOrder.date)} · {itemsSummary(lastOrder.items)} · NT${" "}
+              {formatShortDate(lastOrder.date, t)} · {itemsSummary(lastOrder.items, t)} · NT${" "}
               {(Number(lastOrder.total) || 0).toLocaleString()}
             </span>
           </div>
           <button type="button" className="btn btn-ghost suggest-btn" onClick={applyLastOrder}>
-            帶入
+            {t("form.apply")}
           </button>
         </div>
       )}
 
       <div className="field">
-        <label className="field-label" htmlFor="date">訂單日期</label>
+        <label className="field-label" htmlFor="date">{t("form.date")}</label>
         <input
           className="input"
           id="date"
@@ -445,13 +449,13 @@ export default function OrderForm({ initial = null }) {
 
       <div className="ai-box">
         <label className="field-label" htmlFor="ai-text">
-          貼上訂單文字,AI 幫你填(LINE 訊息直接貼)
+          {t("ai.label")}
         </label>
         <textarea
           className="textarea"
           id="ai-text"
           rows={3}
-          placeholder={"例:阿寶 明天要 高麗菜2顆 蔥三把 小黃瓜一袋"}
+          placeholder={t("ai.placeholder")}
           value={aiText}
           onChange={(e) => setAiText(e.target.value)}
         />
@@ -461,20 +465,26 @@ export default function OrderForm({ initial = null }) {
           disabled={aiBusy || !aiText.trim()}
           onClick={handleAiParse}
         >
-          {aiBusy ? "AI 解析中…" : "AI 解析填入"}
+          {aiBusy ? t("ai.parsing") : t("ai.parse")}
         </button>
-        {aiError && <p className="field-error mt-2">{aiError}</p>}
-        {aiNotice && <p className="ai-notice mt-2">{aiNotice}</p>}
+        {aiError && <p className="field-error mt-2">{t(aiError)}</p>}
+        {aiNotice && (
+          <p className="ai-notice mt-2">
+            {aiNotice.date
+              ? t("ai.noticeWithDate", { n: aiNotice.n, date: formatShortDate(aiNotice.date, t) })
+              : t("ai.notice", { n: aiNotice.n })}
+          </p>
+        )}
       </div>
 
       <div className="field">
-        <span className="field-label">品項</span>
+        <span className="field-label">{t("form.items")}</span>
         {items.map((row, i) => (
           <div className="item-row" key={i}>
             <input
               className="input item-row-name"
-              placeholder="品名"
-              aria-label={`品項 ${i + 1} 品名`}
+              placeholder={t("form.name")}
+              aria-label={t("form.ariaName", { i: i + 1 })}
               value={row.name}
               onChange={(e) => updateItem(i, "name", e.target.value)}
             />
@@ -484,16 +494,16 @@ export default function OrderForm({ initial = null }) {
               inputMode="decimal"
               min="0"
               step="any"
-              placeholder="數量"
-              aria-label={`品項 ${i + 1} 數量`}
+              placeholder={t("form.qty")}
+              aria-label={t("form.ariaQty", { i: i + 1 })}
               value={row.qty}
               onChange={(e) => updateItem(i, "qty", e.target.value)}
             />
             <input
               className="input item-row-unit"
               list="unit-options"
-              placeholder="單位"
-              aria-label={`品項 ${i + 1} 單位`}
+              placeholder={t("form.unit")}
+              aria-label={t("form.ariaUnit", { i: i + 1 })}
               value={row.unit}
               onChange={(e) => updateItem(i, "unit", e.target.value)}
             />
@@ -503,15 +513,15 @@ export default function OrderForm({ initial = null }) {
               inputMode="numeric"
               min="0"
               step="any"
-              placeholder="金額"
-              aria-label={`品項 ${i + 1} 金額`}
+              placeholder={t("form.amount")}
+              aria-label={t("form.ariaAmount", { i: i + 1 })}
               value={row.amount}
               onChange={(e) => updateItem(i, "amount", e.target.value)}
             />
             <button
               type="button"
               className="btn btn-icon btn-ghost-danger"
-              aria-label={`刪除品項 ${i + 1}`}
+              aria-label={t("form.ariaRemove", { i: i + 1 })}
               disabled={items.length <= 1}
               onClick={() => removeItem(i)}
             >
@@ -527,27 +537,27 @@ export default function OrderForm({ initial = null }) {
             <option key={u} value={u} />
           ))}
         </datalist>
-        {errors.items && <p className="field-error">{errors.items}</p>}
+        {errors.items && <p className="field-error">{t(errors.items)}</p>}
         <button type="button" className="btn btn-ghost btn-block" onClick={addItem}>
-          + 新增品項
+          {`+ ${t("form.addItem")}`}
         </button>
       </div>
 
       <div className="total-bar">
-        <span className="total-bar-label">總計</span>
+        <span className="total-bar-label">{t("form.total")}</span>
         <span className="amount">NT$ {total.toLocaleString()}</span>
       </div>
 
-      {submitError && <p className="field-error mt-2">{submitError}</p>}
+      {submitError && <p className="field-error mt-2">{t(submitError)}</p>}
 
       <div className="btn-row mt-4">
         <button type="button" className="btn btn-ghost" disabled={saving} onClick={() => router.push("/orders")}>
-          取消
+          {t("common.cancel")}
         </button>
         <button type="submit" className="btn btn-primary" disabled={saving}>
           {saving
-            ? isPending ? "確認中…" : "儲存中…"
-            : isPending ? "✓ 確認訂單" : "儲存訂單"}
+            ? isPending ? t("form.confirming") : t("form.saving")
+            : isPending ? t("form.confirmOrder") : t("form.saveOrder")}
         </button>
       </div>
     </form>

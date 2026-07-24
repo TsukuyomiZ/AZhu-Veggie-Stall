@@ -1455,3 +1455,34 @@ body {
   }
 }
 
+/* --------------------------------------------------------------------------
+   18. 語言切換鈕(LangToggle:中文 / Tiếng Việt)
+   -------------------------------------------------------------------------- */
+/* 基底是 .segmented;收斂寬度、按內容大小,適合放在頁首角落 */
+.lang-toggle {
+  display: inline-flex;
+  width: auto;
+  align-self: flex-start;
+}
+
+.lang-toggle .segmented-btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+/* compact:頁首用的更小版本。按鈕本體 40px,
+   加上 .segmented 自帶的 4px 內距,整體點擊區仍 ≥ 44px */
+.lang-toggle-compact {
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.lang-toggle-compact .segmented-btn {
+  /* 觸控目標 44px 鐵律:compact 只縮字級與左右內距,不縮高度 */
+  min-height: 44px;
+  padding: var(--space-1) var(--space-3);
+}
+

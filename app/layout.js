@@ -1,5 +1,6 @@
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
+import { I18nProvider } from "@/lib/i18n";
 
 export const metadata = {
   title: "阿珠菜攤",
@@ -21,8 +22,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="zh-TW">
       <body>
-        <main className="page">{children}</main>
-        <BottomNav />
+        <I18nProvider>
+          <main className="page">{children}</main>
+          <BottomNav />
+        </I18nProvider>
       </body>
     </html>
   );

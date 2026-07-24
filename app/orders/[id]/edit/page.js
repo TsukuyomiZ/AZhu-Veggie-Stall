@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import OrderForm from "@/components/OrderForm";
+import { useI18n } from "@/lib/i18n";
 
 export default function EditOrderPage() {
+  const { t } = useI18n();
   const params = useParams();
   const id = params?.id;
 
@@ -46,12 +48,12 @@ export default function EditOrderPage() {
       <header className="page-header">
         <div>
           <h1 className="page-title">
-            {order && order.status === "pending" ? "確認訂單" : "編輯訂單"}
+            {order && order.status === "pending" ? t("orders.confirmTitle") : t("orders.editTitle")}
           </h1>
         </div>
       </header>
 
-      {status === "loading" && <p className="text-muted mt-4">載入訂單中…</p>}
+      {status === "loading" && <p className="text-muted mt-4">{t("orders.loadingOrder")}</p>}
 
       {status === "notfound" && (
         <div className="empty">
@@ -61,17 +63,17 @@ export default function EditOrderPage() {
               <path d="m21 21-4.3-4.3" />
             </svg>
           </div>
-          <p className="empty-text">找不到這筆訂單</p>
-          <p className="empty-hint">訂單可能已被刪除</p>
-          <Link href="/orders" className="btn btn-primary">回訂單列表</Link>
+          <p className="empty-text">{t("orders.notFound")}</p>
+          <p className="empty-hint">{t("orders.notFoundHint")}</p>
+          <Link href="/orders" className="btn btn-primary">{t("orders.backToList")}</Link>
         </div>
       )}
 
       {status === "error" && (
         <div className="empty">
-          <p className="empty-text">訂單載入失敗</p>
-          <p className="empty-hint">請檢查網路後重新整理</p>
-          <Link href="/orders" className="btn btn-primary">回訂單列表</Link>
+          <p className="empty-text">{t("orders.loadFailedTitle")}</p>
+          <p className="empty-hint">{t("orders.loadFailedHint")}</p>
+          <Link href="/orders" className="btn btn-primary">{t("orders.backToList")}</Link>
         </div>
       )}
 

@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n";
 
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const PERIODS = [
-  { key: "week", label: "週" },
-  { key: "month", label: "月" },
-  { key: "quarter", label: "季" },
+  { key: "week", labelKey: "stats.week" },
+  { key: "month", labelKey: "stats.month" },
+  { key: "quarter", labelKey: "stats.quarter" },
 ];
 
 function pad(n) {
@@ -24,14 +24,16 @@ function addDays(d, n) {
 function money(n) {
   return `NT$ ${(Number(n) || 0).toLocaleString()}`;
 }
-// "2026-07-18" → "7/18 (六)"
-function shortDate(dateStr) {
+// "2026-07-18" → 中文 "7/18 (六)" / 越文 "18/7 (T7)"(格式與星期都走字典)
+function shortDate(dateStr, t) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
-  return `${m}/${d} (${WEEKDAYS[dt.getDay()]})`;
+  return t("stats.shortDate", { m, d, w: t(`weekday.${dt.getDay()}`) });
 }
 
-// 以本地時區計算本期/上期的日期區間
+// 以本地時區計算本期/上期的日期區間。
+// 顯示文字(期間標題、本期/上期名稱)只回 key + 變數,由畫面層 t() 組句,
+// 因為中越語序不同(7/18 vs 18/7、{y}年{m}月 vs Tháng {m}/{y})。
 function getRange(period) {
   const now = new Date();
   const y = now.getFullYear();
@@ -44,9 +46,15 @@ function getRange(period) {
       to: fmtDate(sun),
       prevFrom: fmtDate(addDays(mon, -7)),
       prevTo: fmtDate(addDays(mon, -1)),
-      label: `${mon.getMonth() + 1}/${mon.getDate()} – ${sun.getMonth() + 1}/${sun.getDate()}`,
-      thisName: "本週",
-      prevName: "上週",
+      labelKey: "stats.weekLabel",
+      labelVars: {
+        m1: mon.getMonth() + 1,
+        d1: mon.getDate(),
+        m2: sun.getMonth() + 1,
+        d2: sun.getDate(),
+      },
+      thisKey: "stats.thisWeek",
+      prevKey: "stats.lastWeek",
     };
   }
   if (period === "month") {
@@ -55,9 +63,10 @@ function getRange(period) {
       to: fmtDate(new Date(y, m + 1, 0)),
       prevFrom: fmtDate(new Date(y, m - 1, 1)),
       prevTo: fmtDate(new Date(y, m, 0)),
-      label: `${y} 年 ${m + 1} 月`,
-      thisName: "本月",
-      prevName: "上月",
+      labelKey: "stats.monthLabel",
+      labelVars: { y, m: m + 1 },
+      thisKey: "stats.thisMonth",
+      prevKey: "stats.lastMonth",
     };
   }
   const q = Math.floor(m / 3);
@@ -66,14 +75,15 @@ function getRange(period) {
     to: fmtDate(new Date(y, q * 3 + 3, 0)),
     prevFrom: fmtDate(new Date(y, q * 3 - 3, 1)),
     prevTo: fmtDate(new Date(y, q * 3, 0)),
-    label: `${y} 年第 ${q + 1} 季（${q * 3 + 1}–${q * 3 + 3} 月）`,
-    thisName: "本季",
-    prevName: "上一季",
+    labelKey: "stats.quarterLabel",
+    labelVars: { y, q: q + 1, m1: q * 3 + 1, m2: q * 3 + 3 },
+    thisKey: "stats.thisQuarter",
+    prevKey: "stats.lastQuarter",
   };
 }
 
-// 把 byDate 補滿成連續的長條資料
-function buildBars(period, range, byDate) {
+// 把 byDate 補滿成連續的長條資料(tick/detail 是顯示文字,需要 t)
+function buildBars(period, range, byDate, t) {
   const map = new Map(byDate.map((d) => [d.date, d]));
   const bars = [];
   const today = fmtDate(new Date());
@@ -95,8 +105,8 @@ function buildBars(period, range, byDate) {
       }
       bars.push({
         key: prefix,
-        tick: `${mo}月`,
-        detail: `${mo} 月`,
+        tick: t("stats.monthTick", { n: mo }),
+        detail: t("stats.monthDetail", { n: mo }),
         revenue,
         orders,
         isNow: today.startsWith(prefix),
@@ -113,8 +123,8 @@ function buildBars(period, range, byDate) {
     const rec = map.get(cursor);
     bars.push({
       key: cursor,
-      tick: period === "week" ? WEEKDAYS[dt.getDay()] : String(dd),
-      detail: shortDate(cursor),
+      tick: period === "week" ? t(`weekday.${dt.getDay()}`) : String(dd),
+      detail: shortDate(cursor, t),
       revenue: rec ? rec.revenue : 0,
       orders: rec ? rec.orders : 0,
       isNow: cursor === today,
@@ -126,6 +136,7 @@ function buildBars(period, range, byDate) {
 
 // 純 SVG 長條圖：單一系列（品牌綠），數值標籤用文字色
 function BarChart({ bars, valueMode, tickEvery, selectedKey, onSelect }) {
+  const { t } = useI18n();
   const W = 340;
   const H = 200;
   const top = 24; // 留給數值標籤
@@ -143,7 +154,7 @@ function BarChart({ bars, valueMode, tickEvery, selectedKey, onSelect }) {
       viewBox={`0 0 ${W} ${H}`}
       className="barchart"
       role="img"
-      aria-label="營收長條圖"
+      aria-label={t("stats.chartAria")}
     >
       {/* 淡色參考線 */}
       {[0.5, 1].map((f) => (
@@ -202,9 +213,10 @@ function BarChart({ bars, valueMode, tickEvery, selectedKey, onSelect }) {
 }
 
 export default function StatsPage() {
+  const { t } = useI18n();
   const [period, setPeriod] = useState("week");
   const [data, setData] = useState(null); // null = 載入中
-  const [error, setError] = useState("");
+  const [error, setError] = useState(false);
   const [selectedKey, setSelectedKey] = useState(null);
 
   const range = useMemo(() => getRange(period), [period]);
@@ -212,7 +224,7 @@ export default function StatsPage() {
   useEffect(() => {
     let cancelled = false;
     setData(null);
-    setError("");
+    setError(false);
     setSelectedKey(null);
     const qs = new URLSearchParams({
       from: range.from,
@@ -229,7 +241,7 @@ export default function StatsPage() {
         if (!cancelled) setData(d);
       })
       .catch(() => {
-        if (!cancelled) setError("統計載入失敗,請檢查網路後再試一次");
+        if (!cancelled) setError(true);
       });
     return () => {
       cancelled = true;
@@ -237,22 +249,27 @@ export default function StatsPage() {
   }, [range]);
 
   const bars = useMemo(
-    () => (data ? buildBars(period, range, data.byDate) : []),
-    [data, period, range]
+    () => (data ? buildBars(period, range, data.byDate, t) : []),
+    [data, period, range, t]
   );
 
   const selectedBar = bars.find((b) => b.key === selectedKey) || null;
+
+  const thisName = t(range.thisKey);
+  const prevName = t(range.prevKey);
 
   // 與上期比較：tone 決定 badge 顏色
   let compare = null; // { text, tone: "up" | "down" | "flat" | "none" }
   if (data && data.prev) {
     if (data.prev.revenue > 0) {
       const diff = Math.round(((data.summary.revenue - data.prev.revenue) / data.prev.revenue) * 100);
-      if (diff > 0) compare = { text: `比${range.prevName}成長 ${diff}%`, tone: "up" };
-      else if (diff < 0) compare = { text: `比${range.prevName}減少 ${-diff}%`, tone: "down" };
-      else compare = { text: `與${range.prevName}持平`, tone: "flat" };
+      if (diff > 0)
+        compare = { text: t("stats.compareUp", { period: prevName, n: diff }), tone: "up" };
+      else if (diff < 0)
+        compare = { text: t("stats.compareDown", { period: prevName, n: -diff }), tone: "down" };
+      else compare = { text: t("stats.compareFlat", { period: prevName }), tone: "flat" };
     } else if (data.summary.revenue > 0) {
-      compare = { text: `${range.prevName}沒有訂單`, tone: "none" };
+      compare = { text: t("stats.comparePrevEmpty", { period: prevName }), tone: "none" };
     }
   }
   const compareBadgeClass =
@@ -271,12 +288,12 @@ export default function StatsPage() {
     <>
       <header className="page-header">
         <div>
-          <h1 className="page-title">銷量統計</h1>
-          <p className="page-subtitle">{range.label}</p>
+          <h1 className="page-title">{t("stats.title")}</h1>
+          <p className="page-subtitle">{t(range.labelKey, range.labelVars)}</p>
         </div>
       </header>
 
-      <div className="segmented" role="tablist" aria-label="統計期間">
+      <div className="segmented" role="tablist" aria-label={t("stats.periodAria")}>
         {PERIODS.map((p) => (
           <button
             key={p.key}
@@ -286,18 +303,20 @@ export default function StatsPage() {
             className={period === p.key ? "segmented-btn active" : "segmented-btn"}
             onClick={() => setPeriod(p.key)}
           >
-            {p.label}
+            {t(p.labelKey)}
           </button>
         ))}
       </div>
 
       {error && (
         <div className="empty mt-4">
-          <p className="empty-text">{error}</p>
+          <p className="empty-text">{t("stats.loadError")}</p>
         </div>
       )}
 
-      {!error && data === null && <p className="text-muted text-center mt-6">載入中…</p>}
+      {!error && data === null && (
+        <p className="text-muted text-center mt-6">{t("common.loading")}</p>
+      )}
 
       {!error && data !== null && data.summary.orderCount === 0 && (
         <div className="empty mt-4">
@@ -309,9 +328,9 @@ export default function StatsPage() {
               <rect x="17" y="5" width="3" height="13" rx="1" />
             </svg>
           </div>
-          <p className="empty-text">{range.thisName}還沒有訂單</p>
-          <p className="empty-hint">有訂單之後,這裡會顯示營收和品項統計</p>
-          <Link href="/orders/new" className="btn btn-primary">新增訂單</Link>
+          <p className="empty-text">{t("stats.emptyText", { period: thisName })}</p>
+          <p className="empty-hint">{t("stats.emptyHint")}</p>
+          <Link href="/orders/new" className="btn btn-primary">{t("stats.newOrder")}</Link>
         </div>
       )}
 
@@ -319,12 +338,15 @@ export default function StatsPage() {
         <div className="stack-4 mt-4">
           {/* 摘要卡 */}
           <div className="summary-card">
-            <div className="summary-title">{range.thisName}營收</div>
+            <div className="summary-title">{t("stats.revenueTitle", { period: thisName })}</div>
             <div className="summary-nums">
               <div className="summary-num">
                 <div className="summary-num-value">{money(data.summary.revenue)}</div>
                 <div className="summary-num-label">
-                  {data.summary.orderCount} 筆訂單 · {data.summary.customerCount} 位客戶
+                  {t("stats.summarySub", {
+                    orders: data.summary.orderCount,
+                    customers: data.summary.customerCount,
+                  })}
                 </div>
               </div>
             </div>
@@ -335,15 +357,17 @@ export default function StatsPage() {
           <div className="card">
             <div className="stat-lines">
               <div className="stat-line">
-                <span className="stat-line-label">訂單</span>
+                <span className="stat-line-label">{t("stats.lineOrders")}</span>
                 <span className="stat-line-value">
-                  <strong className="stat-em">{data.summary.orderCount}</strong> 筆 ·{" "}
-                  <strong className="stat-em">{data.summary.customerCount}</strong> 位客戶
+                  <strong className="stat-em">{data.summary.orderCount}</strong>{" "}
+                  {t("stats.unitOrders")} ·{" "}
+                  <strong className="stat-em">{data.summary.customerCount}</strong>{" "}
+                  {t("stats.unitCustomers")}
                 </span>
               </div>
               {compare && (
                 <div className="stat-line">
-                  <span className="stat-line-label">趨勢</span>
+                  <span className="stat-line-label">{t("stats.lineTrend")}</span>
                   <span className="stat-line-value">
                     <span className={compareBadgeClass}>{compare.text}</span>
                   </span>
@@ -351,13 +375,14 @@ export default function StatsPage() {
               )}
               {topItem && (
                 <div className="stat-line">
-                  <span className="stat-line-label">賣最好</span>
+                  <span className="stat-line-label">{t("stats.lineTopItem")}</span>
                   <span className="stat-line-value">
                     <span className="stat-item-name">{topItem.name}</span>
                     {topItem.qty ? (
                       <>
                         {" "}
-                        共 <strong className="stat-em">{topItem.qty.toLocaleString()}</strong>{" "}
+                        {t("stats.qtyPrefix")}{" "}
+                        <strong className="stat-em">{topItem.qty.toLocaleString()}</strong>{" "}
                         {topItem.unit}
                       </>
                     ) : null}{" "}
@@ -368,7 +393,9 @@ export default function StatsPage() {
               {busiestBar && busiestBar.revenue > 0 && (
                 <div className="stat-line">
                   <span className="stat-line-label">
-                    {period === "quarter" ? "最旺月份" : "最旺的一天"}
+                    {period === "quarter"
+                      ? t("stats.lineBusiestMonth")
+                      : t("stats.lineBusiestDay")}
                   </span>
                   <span className="stat-line-value">
                     {busiestBar.detail} ·{" "}
@@ -382,7 +409,7 @@ export default function StatsPage() {
           {/* 營收圖表 */}
           <div className="card">
             <h2 className="stats-card-title">
-              {period === "quarter" ? "每月營收" : "每日營收"}
+              {period === "quarter" ? t("stats.chartTitleMonthly") : t("stats.chartTitleDaily")}
             </h2>
             <BarChart
               bars={bars}
@@ -393,14 +420,18 @@ export default function StatsPage() {
             />
             <p className="stats-chart-note">
               {selectedBar
-                ? `${selectedBar.detail}：${money(selectedBar.revenue)} · ${selectedBar.orders} 筆訂單`
-                : "點一下長條可以看當天的金額"}
+                ? t("stats.chartDetail", {
+                    detail: selectedBar.detail,
+                    money: money(selectedBar.revenue),
+                    n: selectedBar.orders,
+                  })
+                : t("stats.chartHint")}
             </p>
           </div>
 
           {/* 品項排行 */}
           <div className="card">
-            <h2 className="stats-card-title">品項排行（依金額）</h2>
+            <h2 className="stats-card-title">{t("stats.itemRankTitle")}</h2>
             <div className="rank-list">
               {data.byItem.map((item, i) => (
                 <div className="rank-row" key={`${item.name}|${item.unit}`}>
@@ -426,13 +457,16 @@ export default function StatsPage() {
 
           {/* 客戶排行 */}
           <div className="card">
-            <h2 className="stats-card-title">客戶排行</h2>
+            <h2 className="stats-card-title">{t("stats.customerRankTitle")}</h2>
             <div className="list">
               {data.byCustomer.map((c, i) => (
                 <div className="row-between rank-customer" key={c.name || i}>
                   <span>
-                    {i + 1}. {c.name || "（未填客戶）"}
-                    <span className="text-muted text-sm"> · {c.orders} 筆</span>
+                    {i + 1}. {c.name || t("stats.noCustomer")}
+                    <span className="text-muted text-sm">
+                      {" "}
+                      · {t("stats.nOrders", { n: c.orders })}
+                    </span>
                   </span>
                   <span className="amount-sm">{money(c.amount)}</span>
                 </div>

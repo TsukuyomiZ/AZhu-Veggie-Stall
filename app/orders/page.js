@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+import { useI18n } from "@/lib/i18n";
 
 // 以本地時區取得某天(offset 天後)的 YYYY-MM-DD
 function localDateStr(offsetDays = 0) {
@@ -15,29 +14,36 @@ function localDateStr(offsetDays = 0) {
   return `${y}-${m}-${day}`;
 }
 
-// "2026-07-21" → "7/21 (二)"
-function formatDateLabel(dateStr) {
+// "2026-07-21" → zh "7/21 (二)" / vi "21/7 (T3)"(月日順序與星期字樣都走字典)
+function formatDateLabel(dateStr, t) {
   const parts = (dateStr || "").split("-").map(Number);
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return dateStr || "未填日期";
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+    return dateStr || t("orders.noDate");
+  }
   const d = new Date(parts[0], parts[1] - 1, parts[2]);
-  return `${parts[1]}/${parts[2]} (${WEEKDAYS[d.getDay()]})`;
+  return t("date.shortFormat", {
+    m: parts[1],
+    d: parts[2],
+    w: t(`weekday.${d.getDay()}`),
+  });
 }
 
 function formatMoney(n) {
   return `NT$ ${(Number(n) || 0).toLocaleString()}`;
 }
 
-// 品項摘要:「高麗菜、青蔥 等 3 項」
-function itemSummary(items) {
+// 品項摘要:「高麗菜、青蔥 等 3 項」(品項名是資料不翻,句型走字典)
+function itemSummary(items, t) {
   const names = (items || []).map((i) => i.name).filter(Boolean);
-  if (names.length === 0) return "無品項";
+  if (names.length === 0) return t("orders.noItems");
   if (names.length <= 2) return names.join("、");
-  return `${names.slice(0, 2).join("、")} 等 ${names.length} 項`;
+  return t("orders.moreItems", { names: names.slice(0, 2).join("、"), n: names.length });
 }
 
 export default function OrdersPage() {
+  const { t } = useI18n();
   const [orders, setOrders] = useState(null); // null = 載入中
-  const [error, setError] = useState("");
+  const [error, setError] = useState(""); // 存字典 key,render 時才 t(),切語言即時生效
   const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
@@ -53,7 +59,7 @@ export default function OrdersPage() {
       .catch(() => {
         if (!cancelled) {
           setOrders([]);
-          setError("訂單載入失敗,請重新整理再試");
+          setError("orders.loadFailed");
         }
       });
     return () => {
@@ -64,8 +70,8 @@ export default function OrdersPage() {
   async function handleDelete(order) {
     const ok = window.confirm(
       order.customerName
-        ? `確定要刪除「${order.customerName}」這筆訂單嗎?`
-        : "確定要刪除這筆待確認訂單嗎?"
+        ? t("orders.deleteConfirmNamed", { name: order.customerName })
+        : t("orders.deleteConfirmPending")
     );
     if (!ok) return;
     setDeletingId(order._id);
@@ -74,7 +80,7 @@ export default function OrdersPage() {
       if (!res.ok) throw new Error("bad status");
       setOrders((prev) => prev.filter((o) => o._id !== order._id));
     } catch (_) {
-      window.alert("刪除失敗,請稍後再試");
+      window.alert(t("orders.deleteFailed"));
     } finally {
       setDeletingId(null);
     }
@@ -104,14 +110,14 @@ export default function OrdersPage() {
     <>
       <header className="page-header">
         <div>
-          <h1 className="page-title">訂單</h1>
+          <h1 className="page-title">{t("orders.title")}</h1>
         </div>
-        <Link href="/orders/new" className="btn btn-primary">+ 新增訂單</Link>
+        <Link href="/orders/new" className="btn btn-primary">{`+ ${t("orders.addOrder")}`}</Link>
       </header>
 
-      {error && <p className="field-error">{error}</p>}
+      {error && <p className="field-error">{t(error)}</p>}
 
-      {orders === null && <p className="text-muted mt-4">載入中…</p>}
+      {orders === null && <p className="text-muted mt-4">{t("common.loading")}</p>}
 
       {orders !== null && orders.length === 0 && !error && (
         <div className="empty">
@@ -122,9 +128,9 @@ export default function OrdersPage() {
               <path d="M8 11h8" />
             </svg>
           </div>
-          <p className="empty-text">還沒有訂單</p>
-          <p className="empty-hint">建立第一筆訂單,開始備貨吧</p>
-          <Link href="/orders/new" className="btn btn-primary">新增訂單</Link>
+          <p className="empty-text">{t("orders.emptyTitle")}</p>
+          <p className="empty-hint">{t("orders.emptyHint")}</p>
+          <Link href="/orders/new" className="btn btn-primary">{t("orders.addOrder")}</Link>
         </div>
       )}
 
@@ -135,24 +141,24 @@ export default function OrdersPage() {
               <path d="M22 12h-6l-2 3h-4l-2-3H2" />
               <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
             </svg>
-            待確認
-            <span className="group-count">{pendingOrders.length} 筆</span>
+            {t("orders.pending")}
+            <span className="group-count">{t("orders.countOrders", { n: pendingOrders.length })}</span>
           </h2>
           <div className="list">
             {pendingOrders.map((order) => (
               <div className="card pending-card" key={order._id}>
                 <div className="row-between">
                   <span className="font-bold" style={{ fontSize: "var(--fs-lg)" }}>
-                    {formatDateLabel(order.date)} 要貨
+                    {t("orders.wantedDate", { date: formatDateLabel(order.date, t) })}
                   </span>
                   <span style={{ display: "flex", gap: "var(--space-2)" }}>
-                    {order.source === "line" && <span className="badge badge-gray">LINE</span>}
-                    <span className="badge badge-pending">待確認</span>
+                    {order.source === "line" && <span className="badge badge-gray">{t("orders.lineBadge")}</span>}
+                    <span className="badge badge-pending">{t("orders.pending")}</span>
                   </span>
                 </div>
                 <div className="mt-2">
                   <div className="item-line">
-                    <span>{itemSummary(order.items)}</span>
+                    <span>{itemSummary(order.items, t)}</span>
                   </div>
                 </div>
                 {order.sourceText && (
@@ -165,10 +171,10 @@ export default function OrdersPage() {
                     disabled={deletingId === order._id}
                     onClick={() => handleDelete(order)}
                   >
-                    {deletingId === order._id ? "刪除中…" : "刪除"}
+                    {deletingId === order._id ? t("orders.deleting") : t("common.delete")}
                   </button>
                   <Link href={`/orders/${order._id}/edit`} className="btn btn-primary">
-                    確認訂單
+                    {t("orders.confirm")}
                   </Link>
                 </div>
               </div>
@@ -182,11 +188,11 @@ export default function OrdersPage() {
         return (
           <section className="date-group" key={group.date}>
             <h2 className="group-title">
-              {formatDateLabel(group.date)}
-              {group.date === today && <span className="badge badge-green">今天</span>}
-              {group.date === tomorrow && <span className="badge badge-amber">明天</span>}
+              {formatDateLabel(group.date, t)}
+              {group.date === today && <span className="badge badge-green">{t("date.today")}</span>}
+              {group.date === tomorrow && <span className="badge badge-amber">{t("date.tomorrow")}</span>}
               <span className="group-count">
-                {group.orders.length} 筆 · {formatMoney(dayTotal)}
+                {t("orders.countOrders", { n: group.orders.length })} · {formatMoney(dayTotal)}
               </span>
             </h2>
             <div className="list">
@@ -201,25 +207,25 @@ export default function OrdersPage() {
                         {order.customerName}
                       </span>
                       <span className={allPrepared ? "badge badge-green" : "badge badge-amber"}>
-                        已備 {preparedCount}/{items.length}
+                        {t("orders.preparedBadge", { done: preparedCount, total: items.length })}
                       </span>
                     </div>
                     <div className="mt-2">
                       <div className="item-line">
-                        <span>{itemSummary(items)}</span>
+                        <span>{itemSummary(items, t)}</span>
                       </div>
                     </div>
                     <hr className="divider" />
                     <div className="row-between">
-                      <span className="text-muted">合計</span>
+                      <span className="text-muted">{t("orders.subtotal")}</span>
                       <span className="amount-sm">{formatMoney(order.total)}</span>
                     </div>
                     <div className="btn-row mt-2">
                       <Link href={`/orders/${order._id}/receipt`} className="btn btn-ghost">
-                        匯出
+                        {t("orders.export")}
                       </Link>
                       <Link href={`/orders/${order._id}/edit`} className="btn btn-ghost">
-                        編輯
+                        {t("common.edit")}
                       </Link>
                       <button
                         type="button"
@@ -227,7 +233,7 @@ export default function OrdersPage() {
                         disabled={deletingId === order._id}
                         onClick={() => handleDelete(order)}
                       >
-                        {deletingId === order._id ? "刪除中…" : "刪除"}
+                        {deletingId === order._id ? t("orders.deleting") : t("common.delete")}
                       </button>
                     </div>
                   </div>

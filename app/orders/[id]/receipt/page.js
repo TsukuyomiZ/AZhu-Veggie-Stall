@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useI18n } from "@/lib/i18n";
 
+// 單據內容(Canvas 圖與頁面預覽)是給客人的正式單據,維持中文不隨介面語言變,
+// 所以這裡的星期/文案不走字典
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const FONT = '"PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif';
 
@@ -182,10 +185,11 @@ function downloadFile(file) {
 
 export default function ReceiptPage() {
   const { id } = useParams();
+  const { t } = useI18n();
   const [order, setOrder] = useState(null); // null = 載入中
-  const [error, setError] = useState("");
+  const [error, setError] = useState(""); // 存字典 key,render 時才 t()
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(""); // 同上,存字典 key
 
   useEffect(() => {
     if (!id) return;
@@ -199,7 +203,7 @@ export default function ReceiptPage() {
         if (!cancelled) setOrder(data);
       })
       .catch(() => {
-        if (!cancelled) setError("訂單載入失敗,請回上一頁再試一次");
+        if (!cancelled) setError("receipt.loadFailed");
       });
     return () => {
       cancelled = true;
@@ -219,15 +223,15 @@ export default function ReceiptPage() {
           // 使用者自己取消分享面板不算錯誤
           if (err && err.name !== "AbortError") {
             downloadFile(file);
-            setNotice("分享沒有成功,已改為下載圖片");
+            setNotice("receipt.shareFallback");
           }
         }
       } else {
         downloadFile(file);
-        setNotice("這個裝置不支援直接分享,已改為下載圖片,再從相簿傳 LINE 即可");
+        setNotice("receipt.noShareSupport");
       }
     } catch (_) {
-      setNotice("產生圖片失敗,請再試一次");
+      setNotice("receipt.genFailed");
     } finally {
       setBusy(false);
     }
@@ -240,7 +244,7 @@ export default function ReceiptPage() {
     try {
       downloadFile(await receiptImageFile(order));
     } catch (_) {
-      setNotice("產生圖片失敗,請再試一次");
+      setNotice("receipt.genFailed");
     } finally {
       setBusy(false);
     }
@@ -249,14 +253,14 @@ export default function ReceiptPage() {
   if (error) {
     return (
       <div className="empty mt-6">
-        <p className="empty-text">{error}</p>
-        <Link href="/orders" className="btn btn-primary mt-4">回訂單列表</Link>
+        <p className="empty-text">{t(error)}</p>
+        <Link href="/orders" className="btn btn-primary mt-4">{t("orders.backToList")}</Link>
       </div>
     );
   }
 
   if (order === null) {
-    return <p className="text-muted text-center mt-6">載入中…</p>;
+    return <p className="text-muted text-center mt-6">{t("common.loading")}</p>;
   }
 
   const items = order.items || [];
@@ -265,7 +269,7 @@ export default function ReceiptPage() {
     <>
       <header className="page-header no-print">
         <div>
-          <h1 className="page-title">訂單單據</h1>
+          <h1 className="page-title">{t("receipt.pageTitle")}</h1>
           <p className="page-subtitle">{order.customerName}</p>
         </div>
       </header>
@@ -318,18 +322,18 @@ export default function ReceiptPage() {
 
       <div className="btn-row mt-4 no-print">
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={handleDownload}>
-          下載圖片
+          {t("receipt.download")}
         </button>
         <button type="button" className="btn btn-primary" disabled={busy} onClick={handleShare}>
-          {busy ? "處理中…" : "分享圖片"}
+          {busy ? t("receipt.busy") : t("receipt.share")}
         </button>
       </div>
-      {notice && <p className="field-error text-center mt-2 no-print">{notice}</p>}
+      {notice && <p className="field-error text-center mt-2 no-print">{t(notice)}</p>}
       <p className="text-muted text-sm text-center mt-2 no-print">
-        按「分享圖片」後選 LINE,就能直接傳給客戶
+        {t("receipt.shareHint")}
       </p>
       <div className="text-center mt-2 no-print">
-        <Link href="/orders" className="btn btn-ghost">回訂單列表</Link>
+        <Link href="/orders" className="btn btn-ghost">{t("orders.backToList")}</Link>
       </div>
     </>
   );

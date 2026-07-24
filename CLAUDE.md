@@ -88,6 +88,18 @@
 - **pending 排除**:備貨頁 `GET /api/orders?date=`、PATCH 勾備貨、stats 全部 aggregation 都排除 pending;PUT 帶 `status:"confirmed"` 只允許 pending→confirmed 且必須有客戶
 - **使用者要自己做的設定**(未完成前功能不會動):LINE Developers 建 Messaging API channel → channel secret / access token 填 .env 與 Vercel 環境變數 → webhook URL 設 `https://<vercel網址>/api/line/webhook` 並啟用 Use webhook → 關閉自動回應訊息(不然客人會收到罐頭回覆)
 
+## 雙語 i18n:繁體中文/越南文(2026-07-24 完成)
+
+- 手寫零依賴:`lib/i18n/index.js` = I18nProvider(包在 app/layout.js)+ `useI18n()` 回 `{t, lang, setLang}`;`t("key", {n:3})` 用 `{n}` 佔位。找不到 key → 退回中文 → 退回 key 字面(一眼看出漏翻)
+- 語言存 localStorage(`azhu_lang`),**跟登入無關,訪客也能切**;SSR 首次 render 固定 zh、掛載後才讀 localStorage(避免 hydration mismatch)
+- 切換鈕 `components/LangToggle.js` 放在今日備貨頁(compact)與登入頁 — 訪客可及的兩個入口
+- 字典四檔按領域拆(`lib/i18n/dict-common|orders|customers|stats.js`),common 有「契約區」(common./nav./date./weekday.)各頁共用,改名要全域檢查
+- **句型整句進字典,不拼字串**(中越語序不同);日期 zh=月/日、vi=日/月,用 `date.shortFormat`/`date.shortDate`/`today.dateFormat` key,星期用 `weekday.0~6`(vi 是 CN/T2~T7)
+- 錯誤訊息 state 存 key 或結構化資料、render 時才 t()(切語言即時換);**伺服器 API 錯誤(中文)照原樣顯示不翻**
+- 不翻的東西:資料(品項名/客戶名/單位/sourceText)、單據 Canvas 圖與 HTML 預覽(給客人的正式單據)、metadata.title、NT$ 格式
+- `app/orders/new/page.js` 因要 export metadata 維持 server component,標題拆成 client 元件 `NewOrderHeader.js`
+- 加新頁面/新文案時:字串一律進對應領域字典(zh/vi 都要),不要在 JSX 三元切換語言
+
 ## 慣例與注意事項
 
 - 日期一律本地時區手動組 `YYYY-MM-DD`,**嚴禁 `toISOString().slice()`**
