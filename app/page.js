@@ -13,6 +13,40 @@ function todayLocal() {
   return `${y}-${m}-${day}`;
 }
 
+// 以店家(客戶)分組:一張卡一個店家,rows = 該店所有訂單的品項
+function groupByStore(orders) {
+  const map = new Map();
+  for (const order of orders) {
+    const key = String(order.customerId || order.customerName || order._id);
+    if (!map.has(key)) {
+      map.set(key, { key, name: order.customerName || "—", rows: [] });
+    }
+    const g = map.get(key);
+    (order.items || []).forEach((item, itemIndex) => {
+      g.rows.push({
+        orderId: order._id,
+        itemIndex,
+        name: item.name,
+        qty: item.qty,
+        unit: item.unit,
+        prepared: !!item.prepared,
+      });
+    });
+  }
+  return Array.from(map.values()).filter((g) => g.rows.length > 0);
+}
+
+// 載入當下決定店家順序(未備完在前、已完成沉底),勾選過程不再重排
+function sortedStoreKeys(orders) {
+  const list = groupByStore(orders);
+  list.sort((a, b) => {
+    const aDone = a.rows.every((r) => r.prepared) ? 1 : 0;
+    const bDone = b.rows.every((r) => r.prepared) ? 1 : 0;
+    return aDone - bDone;
+  });
+  return list.map((g) => g.key);
+}
+
 function formatDateLabel(dateStr, t) {
   const [y, m, d] = dateStr.split("-").map(Number);
   if (!y || !m || !d) return dateStr;
@@ -29,6 +63,10 @@ export default function Page() {
   const [loadError, setLoadError] = useState(false);
   const [patchError, setPatchError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // 展開中的店家 key(預設全部收合)
+  const [expanded, setExpanded] = useState(() => new Set());
+  // 載入時定案的店家順序,勾選中不重排(避免卡片跳位置)
+  const [storeOrder, setStoreOrder] = useState([]);
   const patchErrorTimer = useRef(null);
 
   useEffect(() => {
@@ -42,7 +80,10 @@ export default function Page() {
       })
       .then((data) => {
         if (cancelled) return;
-        setOrders(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        setOrders(list);
+        setStoreOrder(sortedStoreKeys(list));
+        setExpanded(new Set());
         setLoading(false);
       })
       .catch(() => {
@@ -101,41 +142,26 @@ export default function Page() {
     [setPrepared, showPatchError]
   );
 
+  const toggleStore = useCallback((key) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   const groups = useMemo(() => {
-    const map = new Map();
-    for (const order of orders) {
-      (order.items || []).forEach((item, itemIndex) => {
-        const key = `${item.name}|${item.unit}`;
-        if (!map.has(key)) {
-          map.set(key, {
-            key,
-            name: item.name,
-            unit: item.unit,
-            totalQty: 0,
-            preparedQty: 0,
-            rows: [],
-          });
-        }
-        const g = map.get(key);
-        g.totalQty += item.qty;
-        if (item.prepared) g.preparedQty += item.qty;
-        g.rows.push({
-          orderId: order._id,
-          itemIndex,
-          customerName: order.customerName,
-          qty: item.qty,
-          prepared: !!item.prepared,
-        });
-      });
-    }
-    const list = Array.from(map.values());
+    const list = groupByStore(orders);
+    // 依載入時定案的順序排,勾選只改狀態不動位置
+    const idx = new Map(storeOrder.map((k, i) => [k, i]));
     list.sort((a, b) => {
-      const aDone = a.rows.every((r) => r.prepared) ? 1 : 0;
-      const bDone = b.rows.every((r) => r.prepared) ? 1 : 0;
-      return aDone - bDone;
+      const ai = idx.has(a.key) ? idx.get(a.key) : Infinity;
+      const bi = idx.has(b.key) ? idx.get(b.key) : Infinity;
+      return ai - bi;
     });
     return list;
-  }, [orders]);
+  }, [orders, storeOrder]);
 
   const totalRows = groups.reduce((n, g) => n + g.rows.length, 0);
   const preparedRows = groups.reduce(
@@ -234,55 +260,84 @@ export default function Page() {
             </div>
           </section>
 
-          <div className="stack-4 mt-6">
-            {groups.map((g) => {
-              const done = g.rows.every((r) => r.prepared);
+          <div className="list mt-6">
+            {groups.map((g, i) => {
+              const preparedCount = g.rows.filter((r) => r.prepared).length;
+              const done = preparedCount === g.rows.length;
+              const open = expanded.has(g.key);
+              const bodyId = `store-body-${i}`;
               return (
-                <section className="date-group" key={g.key}>
-                  <h2 className="group-title">
-                    {g.name}
-                    <span className="group-count">
-                      {t("today.groupProgress", {
-                        prepared: g.preparedQty,
-                        total: g.totalQty,
-                        unit: g.unit,
+                <section className="store-card" key={g.key}>
+                  <button
+                    type="button"
+                    className="store-head"
+                    aria-expanded={open}
+                    aria-controls={bodyId}
+                    onClick={() => toggleStore(g.key)}
+                  >
+                    <span className="store-name">{g.name}</span>
+                    <span
+                      className={
+                        done
+                          ? "store-progress store-progress-done"
+                          : "store-progress"
+                      }
+                    >
+                      {t("today.storeProgress", {
+                        prepared: preparedCount,
+                        total: g.rows.length,
                       })}
                     </span>
-                    {done ? (
-                      <span className="badge badge-green">{t("today.done")}</span>
-                    ) : null}
-                  </h2>
-                  <div className="check-group">
-                    {g.rows.map((r) => (
-                      <label
-                        className="check-row"
-                        key={`${r.orderId}-${r.itemIndex}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={r.prepared}
-                          onChange={() =>
-                            toggleItem(r.orderId, r.itemIndex, !r.prepared)
-                          }
-                        />
-                        <span className="check-box" aria-hidden="true">
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            strokeWidth="4"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                    <svg
+                      className="store-chevron"
+                      viewBox="0 0 24 24"
+                      width="22"
+                      height="22"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                  </button>
+                  {open ? (
+                    <div className="store-body" id={bodyId}>
+                      <div className="check-group">
+                        {g.rows.map((r) => (
+                          <label
+                            className="check-row"
+                            key={`${r.orderId}-${r.itemIndex}`}
                           >
-                            <path d="m5 13 4 4 10-10" />
-                          </svg>
-                        </span>
-                        <span className="check-name">{r.customerName}</span>
-                        <span className="check-qty">
-                          {r.qty} {g.unit}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
+                            <input
+                              type="checkbox"
+                              checked={r.prepared}
+                              onChange={() =>
+                                toggleItem(r.orderId, r.itemIndex, !r.prepared)
+                              }
+                            />
+                            <span className="check-box" aria-hidden="true">
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                strokeWidth="4"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="m5 13 4 4 10-10" />
+                              </svg>
+                            </span>
+                            <span className="check-name">{r.name}</span>
+                            <span className="check-qty">
+                              {r.qty} {r.unit}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
               );
             })}

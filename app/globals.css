@@ -656,6 +656,80 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+   9b. 店家收合卡(今日備貨頁:一張卡 = 一個店家,點標題展開品項)
+   -------------------------------------------------------------------------- */
+.store-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* 整列標題都是按鈕(≥56px 觸控目標) */
+.store-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap-lg);
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.store-head:active {
+  background: var(--green-50);
+}
+
+.store-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* 標題右側「備貨數量:4/10」(未完成=琥珀、完成=綠) */
+.store-progress {
+  flex: none;
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--amber-700);
+  font-variant-numeric: tabular-nums;
+}
+
+.store-progress-done {
+  color: var(--green-700);
+}
+
+/* 右端箭頭,展開時轉 90 度 */
+.store-chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.store-head[aria-expanded="true"] .store-chevron {
+  transform: rotate(90deg);
+}
+
+/* 展開後的品項區 */
+.store-body {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.store-body .check-group {
+  margin-bottom: 0;
+}
+
+/* --------------------------------------------------------------------------
    10. 摘要卡與進度條(今日備貨頁頂部)
    -------------------------------------------------------------------------- */
 .summary-card {
