@@ -29,6 +29,17 @@ export async function GET(req) {
   // 舊訂單沒有 status 欄位＝視同已確認，所以用 $ne 而不是 $eq: "confirmed"。
   // 不帶 date 的完整列表（需登入）照舊回全部（含 pending），前端要顯示待確認區塊。
   const query = date ? { date, status: { $ne: "pending" } } : {};
+  // from/to 區間查詢（歷史訂單頁用，走「不帶 date 需登入」那條規則）：只回已確認的單
+  if (!date) {
+    const from = (searchParams.get("from") || "").trim();
+    const to = (searchParams.get("to") || "").trim();
+    if (from || to) {
+      query.date = {};
+      if (from) query.date.$gte = from;
+      if (to) query.date.$lte = to;
+      query.status = { $ne: "pending" };
+    }
+  }
   // 查某客戶的歷史訂單（例如帶入上次訂單），最新的排前面
   const customerId = searchParams.get("customerId");
   if (customerId) query.customerId = customerId;

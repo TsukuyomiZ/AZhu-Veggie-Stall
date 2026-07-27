@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
+import OrderCard, { formatMoney, itemSummary } from "@/components/OrderCard";
 
 // 以本地時區取得某天(offset 天後)的 YYYY-MM-DD
 function localDateStr(offsetDays = 0) {
@@ -28,23 +29,19 @@ function formatDateLabel(dateStr, t) {
   });
 }
 
-function formatMoney(n) {
-  return `NT$ ${(Number(n) || 0).toLocaleString()}`;
-}
-
-// 品項摘要:「高麗菜、青蔥 等 3 項」(品項名是資料不翻,句型走字典)
-function itemSummary(items, t) {
-  const names = (items || []).map((i) => i.name).filter(Boolean);
-  if (names.length === 0) return t("orders.noItems");
-  if (names.length <= 2) return names.join("、");
-  return t("orders.moreItems", { names: names.slice(0, 2).join("、"), n: names.length });
-}
-
 export default function OrdersPage() {
   const { t } = useI18n();
   const [orders, setOrders] = useState(null); // null = 載入中
   const [error, setError] = useState(""); // 存字典 key,render 時才 t(),切語言即時生效
   const [deletingId, setDeletingId] = useState(null);
+
+  // 「查其他日期」收合查詢:range 有值=查詢模式(取代預設列表),null=預設(今天與之後)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [from, setFrom] = useState(() => localDateStr(-7));
+  const [to, setTo] = useState(() => localDateStr(0));
+  const [range, setRange] = useState(null); // { from, to, orders }
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(""); // 存字典 key
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +64,29 @@ export default function OrdersPage() {
     };
   }, []);
 
+  function handleSearch(e) {
+    e.preventDefault();
+    if (from > to) {
+      setSearchError("orders.rangeError");
+      return;
+    }
+    setSearching(true);
+    setSearchError("");
+    fetch(`/api/orders?from=${from}&to=${to}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("bad status");
+        return res.json();
+      })
+      .then((data) => {
+        setRange({ from, to, orders: Array.isArray(data) ? data : [] });
+        setSearching(false);
+      })
+      .catch(() => {
+        setSearchError("orders.loadFailed");
+        setSearching(false);
+      });
+  }
+
   async function handleDelete(order) {
     const ok = window.confirm(
       order.customerName
@@ -78,7 +98,11 @@ export default function OrdersPage() {
     try {
       const res = await fetch(`/api/orders/${order._id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("bad status");
-      setOrders((prev) => prev.filter((o) => o._id !== order._id));
+      // 預設列表與查詢結果都要同步移除
+      setOrders((prev) => (prev || []).filter((o) => o._id !== order._id));
+      setRange((prev) =>
+        prev ? { ...prev, orders: prev.orders.filter((o) => o._id !== order._id) } : prev
+      );
     } catch (_) {
       window.alert(t("orders.deleteFailed"));
     } finally {
@@ -89,20 +113,30 @@ export default function OrdersPage() {
   const today = localDateStr(0);
   const tomorrow = localDateStr(1);
 
-  // 待確認訂單(LINE 自動收單)獨立置頂,不進日期分組
-  const pendingOrders = orders ? orders.filter((o) => o.status === "pending") : [];
+  // 待確認訂單(LINE 自動收單)獨立置頂,只在預設模式顯示
+  const pendingOrders =
+    !range && orders ? orders.filter((o) => o.status === "pending") : [];
 
-  // 按日期分組(API 已由新到舊排序,維持原順序;排除待確認)
+  // 按日期分組。
+  // 預設模式:只顯示今天與之後(過去的用「查其他日期」),今天最上、再來明天、之後依序。
+  // 查詢模式:顯示查詢區間結果,維持 API 的新到舊順序。
   const groups = [];
-  if (orders) {
+  const source = range ? range.orders : orders;
+  if (source) {
     const map = new Map();
-    for (const o of orders) {
-      if (o.status === "pending") continue;
+    for (const o of source) {
+      if (!range) {
+        if (o.status === "pending") continue;
+        if (!o.date || o.date < today) continue;
+      }
       if (!map.has(o.date)) {
         map.set(o.date, { date: o.date, orders: [] });
         groups.push(map.get(o.date));
       }
       map.get(o.date).orders.push(o);
+    }
+    if (!range) {
+      groups.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     }
   }
 
@@ -115,11 +149,87 @@ export default function OrdersPage() {
         <Link href="/orders/new" className="btn btn-primary">{`+ ${t("orders.addOrder")}`}</Link>
       </header>
 
-      {error && <p className="field-error">{t(error)}</p>}
+      <button
+        type="button"
+        className="btn btn-ghost btn-block"
+        aria-expanded={searchOpen}
+        onClick={() => setSearchOpen((v) => !v)}
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 3" />
+        </svg>
+        {t("orders.searchOther")}
+      </button>
 
-      {orders === null && <p className="text-muted mt-4">{t("common.loading")}</p>}
+      {searchOpen && (
+        <form className="mt-2" onSubmit={handleSearch}>
+          <div className="form-row">
+            <div className="field">
+              <label className="field-label" htmlFor="search-from">
+                {t("orders.from")}
+              </label>
+              <input
+                className="input"
+                id="search-from"
+                type="date"
+                value={from}
+                onChange={(e) => {
+                  if (e.target.value) setFrom(e.target.value);
+                }}
+              />
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="search-to">
+                {t("orders.to")}
+              </label>
+              <input
+                className="input"
+                id="search-to"
+                type="date"
+                value={to}
+                onChange={(e) => {
+                  if (e.target.value) setTo(e.target.value);
+                }}
+              />
+            </div>
+          </div>
+          <button type="submit" className="btn btn-primary btn-block" disabled={searching}>
+            {searching ? t("orders.searching") : t("orders.search")}
+          </button>
+        </form>
+      )}
 
-      {orders !== null && orders.length === 0 && !error && (
+      {searchError && <p className="field-error mt-2">{t(searchError)}</p>}
+
+      {range && (
+        <div className="card mt-4">
+          <div className="row-between">
+            <div>
+              <div className="font-bold">
+                {t("orders.showingRange", {
+                  from: formatDateLabel(range.from, t),
+                  to: formatDateLabel(range.to, t),
+                })}
+              </div>
+              <div className="text-muted text-sm">
+                {t("orders.historyCount", { n: range.orders.length })}
+              </div>
+            </div>
+            <button type="button" className="btn btn-ghost" onClick={() => setRange(null)}>
+              {t("orders.backToDefault")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && !range && <p className="field-error mt-4">{t(error)}</p>}
+
+      {orders === null && !range && (
+        <p className="text-muted mt-4">{t("common.loading")}</p>
+      )}
+
+      {!range && orders !== null && !error && pendingOrders.length === 0 && groups.length === 0 && (
         <div className="empty">
           <div className="empty-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -131,6 +241,19 @@ export default function OrdersPage() {
           <p className="empty-text">{t("orders.emptyTitle")}</p>
           <p className="empty-hint">{t("orders.emptyHint")}</p>
           <Link href="/orders/new" className="btn btn-primary">{t("orders.addOrder")}</Link>
+        </div>
+      )}
+
+      {range && groups.length === 0 && (
+        <div className="empty mt-4">
+          <div className="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 3" />
+            </svg>
+          </div>
+          <p className="empty-text">{t("orders.historyEmpty")}</p>
+          <p className="empty-hint">{t("orders.historyEmptyHint")}</p>
         </div>
       )}
 
@@ -196,49 +319,14 @@ export default function OrdersPage() {
               </span>
             </h2>
             <div className="list">
-              {group.orders.map((order) => {
-                const items = order.items || [];
-                const preparedCount = items.filter((i) => i.prepared).length;
-                const allPrepared = items.length > 0 && preparedCount === items.length;
-                return (
-                  <div className="card" key={order._id}>
-                    <div className="row-between">
-                      <span className="font-bold" style={{ fontSize: "var(--fs-lg)" }}>
-                        {order.customerName}
-                      </span>
-                      <span className={allPrepared ? "badge badge-green" : "badge badge-amber"}>
-                        {t("orders.preparedBadge", { done: preparedCount, total: items.length })}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <div className="item-line">
-                        <span>{itemSummary(items, t)}</span>
-                      </div>
-                    </div>
-                    <hr className="divider" />
-                    <div className="row-between">
-                      <span className="text-muted">{t("orders.subtotal")}</span>
-                      <span className="amount-sm">{formatMoney(order.total)}</span>
-                    </div>
-                    <div className="btn-row mt-2">
-                      <Link href={`/orders/${order._id}/receipt`} className="btn btn-ghost">
-                        {t("orders.export")}
-                      </Link>
-                      <Link href={`/orders/${order._id}/edit`} className="btn btn-ghost">
-                        {t("common.edit")}
-                      </Link>
-                      <button
-                        type="button"
-                        className="btn btn-ghost-danger"
-                        disabled={deletingId === order._id}
-                        onClick={() => handleDelete(order)}
-                      >
-                        {deletingId === order._id ? t("orders.deleting") : t("common.delete")}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {group.orders.map((order) => (
+                <OrderCard
+                  key={order._id}
+                  order={order}
+                  deleting={deletingId === order._id}
+                  onDelete={handleDelete}
+                />
+              ))}
             </div>
           </section>
         );
