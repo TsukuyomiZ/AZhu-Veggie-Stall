@@ -8,6 +8,9 @@ import { useI18n } from "@/lib/i18n";
 // 單位是資料(隨訂單存進 DB),不翻譯
 const COMMON_UNITS = ["斤", "公斤", "兩", "把", "顆", "粒", "箱", "袋", "包", "條", "隻"];
 
+// 數量快選數字鍵:點一下累加在尾端(先點 1 再點 3 = 13)
+const QTY_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+
 // 以本地時區計算 YYYY-MM-DD(不要用 toISOString,避免時區偏移)
 function localDateStr(offsetDays = 0) {
   const d = new Date();
@@ -110,6 +113,12 @@ export default function OrderForm({ initial = null }) {
       : [emptyRow()]
   );
   const [errors, setErrors] = useState({});
+  // 單位快選 chips 顯示在哪一列(-1 = 不顯示);iOS 的原生 datalist 幾乎不會出現,改用自訂按鈕
+  const [unitPickerRow, setUnitPickerRow] = useState(-1);
+  // 數量數字鍵顯示在哪一列(同上;焦點只會在一個欄位,幾種 chips 不會同時出現)
+  const [qtyPickerRow, setQtyPickerRow] = useState(-1);
+  // 金額數字鍵顯示在哪一列(規則同數量:點一下累加在尾端)
+  const [amountPickerRow, setAmountPickerRow] = useState(-1);
   const [submitError, setSubmitError] = useState("");
   const [saving, setSaving] = useState(false);
   const [lastOrder, setLastOrder] = useState(null); // 選定客戶的上一筆訂單
@@ -254,6 +263,42 @@ export default function OrderForm({ initial = null }) {
 
   function updateItem(i, field, value) {
     setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+  }
+
+  // 數量/金額共用的快選數字鍵:點一下累加在尾端,「0」開頭時換成新數字避免 03
+  function digitPad(i, field, value) {
+    return (
+      <div className="unit-chips">
+        {QTY_DIGITS.map((d) => (
+          <button
+            type="button"
+            key={d}
+            className="unit-chip"
+            onPointerDown={(e) => {
+              e.preventDefault(); // 同單位 chips:搶在 input blur 之前執行
+              updateItem(i, field, value === "0" ? d : value + d);
+            }}
+          >
+            {d}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="unit-chip"
+          aria-label={t("form.qtyBackspace")}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            updateItem(i, field, value.slice(0, -1));
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 6H8l-5 6 5 6h13a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1Z" />
+            <path d="m18 9-6 6" />
+            <path d="m12 9 6 6" />
+          </svg>
+        </button>
+      </div>
+    );
   }
 
   function addItem() {
@@ -518,14 +563,23 @@ export default function OrderForm({ initial = null }) {
               aria-label={t("form.ariaQty", { i: i + 1 })}
               value={row.qty}
               onChange={(e) => updateItem(i, "qty", e.target.value)}
+              onFocus={() => setQtyPickerRow(i)}
+              onClick={() => setQtyPickerRow(i)}
+              onBlur={() =>
+                setTimeout(() => setQtyPickerRow((cur) => (cur === i ? -1 : cur)), 150)
+              }
             />
             <input
               className="input item-row-unit"
-              list="unit-options"
               placeholder={t("form.unit")}
               aria-label={t("form.ariaUnit", { i: i + 1 })}
               value={row.unit}
               onChange={(e) => updateItem(i, "unit", e.target.value)}
+              onFocus={() => setUnitPickerRow(i)}
+              onClick={() => setUnitPickerRow(i)}
+              onBlur={() =>
+                setTimeout(() => setUnitPickerRow((cur) => (cur === i ? -1 : cur)), 150)
+              }
             />
             <input
               className="input item-row-price"
@@ -537,6 +591,11 @@ export default function OrderForm({ initial = null }) {
               aria-label={t("form.ariaAmount", { i: i + 1 })}
               value={row.amount}
               onChange={(e) => updateItem(i, "amount", e.target.value)}
+              onFocus={() => setAmountPickerRow(i)}
+              onClick={() => setAmountPickerRow(i)}
+              onBlur={() =>
+                setTimeout(() => setAmountPickerRow((cur) => (cur === i ? -1 : cur)), 150)
+              }
             />
             <button
               type="button"
@@ -550,13 +609,28 @@ export default function OrderForm({ initial = null }) {
                 <path d="m6 6 12 12" />
               </svg>
             </button>
+            {unitPickerRow === i && (
+              <div className="unit-chips">
+                {COMMON_UNITS.map((u) => (
+                  <button
+                    type="button"
+                    key={u}
+                    className={row.unit === u ? "unit-chip unit-chip-active" : "unit-chip"}
+                    onPointerDown={(e) => {
+                      e.preventDefault(); // 搶在 input blur 之前填入,鍵盤不縮
+                      updateItem(i, "unit", u);
+                      setUnitPickerRow(-1);
+                    }}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+            )}
+            {qtyPickerRow === i && digitPad(i, "qty", row.qty)}
+            {amountPickerRow === i && digitPad(i, "amount", row.amount)}
           </div>
         ))}
-        <datalist id="unit-options">
-          {COMMON_UNITS.map((u) => (
-            <option key={u} value={u} />
-          ))}
-        </datalist>
         {errors.items && <p className="field-error">{t(errors.items)}</p>}
         <button type="button" className="btn btn-ghost btn-block" onClick={addItem}>
           {`+ ${t("form.addItem")}`}

@@ -534,6 +534,40 @@ body {
   align-self: center;
 }
 
+/* 單位快選 chips:iOS 的原生 datalist 幾乎不會出現,改用自訂按鈕;
+   佔滿品項卡整行(排進 grid 的隱含列),單位欄取得焦點時才顯示 */
+.unit-chips {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.unit-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--fs-base);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.unit-chip:active {
+  background: var(--green-50);
+}
+
+.unit-chip-active {
+  background: var(--green-100);
+  border-color: var(--green-600);
+  color: var(--green-700);
+  font-weight: 700;
+}
+
 /* 表單底部總計列 */
 .total-bar {
   display: flex;

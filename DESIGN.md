@@ -38,7 +38,7 @@
 | 卡片 | `.card` `.card-tappable` `.list` `.row-between` `.divider` `.amount` `.amount-sm` `.item-line` |
 | 日期群組 | `.date-group` `.group-title` `.group-count` |
 | 按鈕 | `.btn` + `.btn-primary` / `.btn-danger` / `.btn-ghost` / `.btn-ghost-danger`;`.btn-block` `.btn-row` `.btn-icon` |
-| 表單 | `.field` `.field-label` `.input` `.select` `.textarea` `.field-hint` `.field-error` `.input-error` `.form-row` `.item-row`(+ `.item-row-name` `.item-row-qty` `.item-row-price`)`.total-bar` `.total-bar-label` |
+| 表單 | `.field` `.field-label` `.input` `.select` `.textarea` `.field-hint` `.field-error` `.input-error` `.form-row` `.item-row`(+ `.item-row-name` `.item-row-qty` `.item-row-price`)`.unit-chips` `.unit-chip`(+ `.unit-chip-active`)`.total-bar` `.total-bar-label` |
 | Checklist | `.check-group` `.check-row` `.check-box` `.check-name` `.check-qty` |
 | 摘要 | `.summary-card` `.summary-title` `.summary-nums` `.summary-num` `.summary-num-value` `.summary-num-label` `.progress` `.progress-bar`(白卡片內用 `.progress-light` + `.progress-bar-green`) |
 | Badge | `.badge` + `.badge-green` / `.badge-amber` / `.badge-red` / `.badge-gray` |
