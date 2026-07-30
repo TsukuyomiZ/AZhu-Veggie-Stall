@@ -1074,6 +1074,12 @@ body {
   white-space: nowrap;
 }
 
+.receipt-table .receipt-col-unit {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .receipt-table .receipt-col-amount {
   text-align: right;
   white-space: nowrap;

@@ -22,6 +22,14 @@ function formatMoney(n) {
   return `NT$ ${(Number(n) || 0).toLocaleString()}`;
 }
 
+// 單價 = 金額 ÷ 數量,最多一位小數;缺數量或金額顯示「—」
+function unitPriceText(item) {
+  const qty = Number(item.qty);
+  const amount = Number(item.amount);
+  if (!qty || !amount) return "—";
+  return (Math.round((amount / qty) * 10) / 10).toLocaleString();
+}
+
 // 過長文字裁切成「…」，避免超出畫布
 function truncate(ctx, text, maxWidth) {
   if (ctx.measureText(text).width <= maxWidth) return text;
@@ -108,14 +116,17 @@ function drawReceipt(order) {
 
   // 表頭
   y += 32;
-  const qtyRight = W - P - 96; // 數量欄右緣
+  const amountRight = W - P; // 金額欄右緣
+  const unitRight = amountRight - 84; // 單價欄右緣
+  const qtyRight = unitRight - 58; // 數量欄右緣
   ctx.fillStyle = muted;
   ctx.font = `700 12px ${FONT}`;
   ctx.textAlign = "left";
   ctx.fillText("品項", P, y);
   ctx.textAlign = "right";
   ctx.fillText("數量", qtyRight, y);
-  ctx.fillText("金額", W - P, y);
+  ctx.fillText("單價", unitRight, y);
+  ctx.fillText("金額", amountRight, y);
 
   y += 10;
   ctx.strokeStyle = "#b7c6b6";
@@ -132,11 +143,12 @@ function drawReceipt(order) {
     ctx.fillStyle = ink;
     ctx.font = `400 15px ${FONT}`;
     ctx.textAlign = "left";
-    ctx.fillText(truncate(ctx, item.name || "", 130), P, textY);
+    ctx.fillText(truncate(ctx, item.name || "", 96), P, textY);
     ctx.textAlign = "right";
     const qtyText = item.qty ? `${item.qty} ${item.unit || ""}`.trim() : item.unit || "—";
     ctx.fillText(qtyText, qtyRight, textY);
-    ctx.fillText(formatMoney(item.amount), W - P, textY);
+    ctx.fillText(unitPriceText(item), unitRight, textY);
+    ctx.fillText(formatMoney(item.amount), amountRight, textY);
     ctx.strokeStyle = border;
     ctx.beginPath();
     ctx.moveTo(P, y);
@@ -296,6 +308,7 @@ export default function ReceiptPage() {
             <tr>
               <th>品項</th>
               <th className="receipt-col-qty">數量</th>
+              <th className="receipt-col-unit">單價</th>
               <th className="receipt-col-amount">金額</th>
             </tr>
           </thead>
@@ -306,6 +319,7 @@ export default function ReceiptPage() {
                 <td className="receipt-col-qty">
                   {item.qty ? `${item.qty} ${item.unit}`.trim() : item.unit || "—"}
                 </td>
+                <td className="receipt-col-unit">{unitPriceText(item)}</td>
                 <td className="receipt-col-amount">{formatMoney(item.amount)}</td>
               </tr>
             ))}

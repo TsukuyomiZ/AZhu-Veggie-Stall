@@ -41,6 +41,38 @@ function itemsSummary(items, t) {
   return t("orders.moreItems", { names: names.slice(0, 2).join("、"), n: names.length });
 }
 
+// AI 解析結果合併進現有品項列:同名且單位相容(相同或其一沒填)→ 數量相加,
+// 其餘附加到列表後面;不再整份覆蓋
+function mergeParsedItems(prev, parsed) {
+  const rows = prev
+    .filter((row) => row.name.trim()) // 丟掉還沒填的空白列
+    .map((row) => ({ ...row }));
+  for (const it of parsed || []) {
+    const name = (it.name || "").trim();
+    if (!name) continue;
+    const unit = (it.unit || "").trim();
+    const hit = rows.find(
+      (row) =>
+        row.name.trim() === name &&
+        (!unit || !row.unit.trim() || row.unit.trim() === unit)
+    );
+    if (hit) {
+      const sum = (Number(hit.qty) || 0) + (Number(it.qty) || 0);
+      hit.qty = sum ? String(Math.round(sum * 1000) / 1000) : ""; // 避免 0.1+0.2 浮點尾數
+      if (!hit.unit.trim() && unit) hit.unit = unit;
+    } else {
+      rows.push({
+        name,
+        qty: it.qty ? String(it.qty) : "",
+        unit,
+        amount: "", // 金額訊息裡通常沒有,由人補
+        prepared: false,
+      });
+    }
+  }
+  return rows.length > 0 ? rows : [emptyRow()];
+}
+
 function toRow(item) {
   return {
     name: item.name || "",
@@ -188,14 +220,10 @@ export default function OrderForm({ initial = null }) {
     }
   }
 
-  // 貼上 LINE 訊息 → AI 解析成品項，填進表單（金額留白由人補）
+  // 貼上 LINE 訊息 → AI 解析成品項,合併進表單(同名品項數量相加,金額留白由人補)
   async function handleAiParse() {
     const text = aiText.trim();
     if (!text || aiBusy) return;
-    const hasInput = items.some((row) => row.name.trim() || row.qty || row.amount);
-    if (hasInput && !window.confirm(t("ai.overwriteConfirm"))) {
-      return;
-    }
     setAiBusy(true);
     setAiError("");
     setAiNotice(null);
@@ -209,15 +237,7 @@ export default function OrderForm({ initial = null }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "ai.parseFailed");
 
-      setItems(
-        data.items.map((it) => ({
-          name: it.name,
-          qty: it.qty ? String(it.qty) : "",
-          unit: it.unit || "",
-          amount: "", // 金額訊息裡通常沒有，由人補
-          prepared: false,
-        }))
-      );
+      setItems((prev) => mergeParsedItems(prev, data.items));
 
       if (data.date) {
         setDate(data.date);
