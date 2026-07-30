@@ -490,6 +490,15 @@ body {
   min-width: 0;
 }
 
+/* 品項卡片:上半是輸入格線(.item-row),下半是快選 chips 展開區(.chip-reveal) */
+.item-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
 /* 動態品項列:兩行網格 — 第一行品名+刪除,第二行數量/單位/金額 */
 .item-row {
   display: grid;
@@ -498,11 +507,6 @@ body {
     "name name name del"
     "qty  unit amount amount";
   gap: var(--space-2);
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-3);
-  margin-bottom: var(--space-3);
 }
 
 .item-row .input {
@@ -534,10 +538,48 @@ body {
   align-self: center;
 }
 
+/* 快選 chips 展開區:grid-template-rows 0fr→1fr 做高度滑順過渡,
+   收合時完全不佔空間;舊瀏覽器不支援 fr 過渡就直接跳,功能不受影響 */
+.chip-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 0.25s ease,
+    margin-top 0.25s ease,
+    opacity 0.2s ease,
+    visibility 0s linear 0.25s;
+}
+
+.chip-reveal-open {
+  grid-template-rows: 1fr;
+  margin-top: var(--space-2);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-rows 0.25s ease,
+    margin-top 0.25s ease,
+    opacity 0.2s ease 0.05s,
+    visibility 0s;
+}
+
+.chip-reveal > .unit-chips {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip-reveal,
+  .chip-reveal-open {
+    transition: none;
+  }
+}
+
 /* 單位快選 chips:iOS 的原生 datalist 幾乎不會出現,改用自訂按鈕;
-   佔滿品項卡整行(排進 grid 的隱含列),單位欄取得焦點時才顯示 */
+   單位欄取得焦點時由 .chip-reveal 展開顯示 */
 .unit-chips {
-  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);

@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
 
 // 單位是資料(隨訂單存進 DB),不翻譯
-const COMMON_UNITS = ["斤", "公斤", "兩", "把", "顆", "粒", "箱", "袋", "包", "條", "隻"];
+const COMMON_UNITS = ["斤", "公斤", "兩", "把", "顆", "粒", "箱", "袋", "包", "條", "隻","罐"];
 
 // 數量快選數字鍵:點一下累加在尾端(先點 1 再點 3 = 13)
 const QTY_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
@@ -113,12 +113,12 @@ export default function OrderForm({ initial = null }) {
       : [emptyRow()]
   );
   const [errors, setErrors] = useState({});
-  // 單位快選 chips 顯示在哪一列(-1 = 不顯示);iOS 的原生 datalist 幾乎不會出現,改用自訂按鈕
-  const [unitPickerRow, setUnitPickerRow] = useState(-1);
-  // 數量數字鍵顯示在哪一列(同上;焦點只會在一個欄位,幾種 chips 不會同時出現)
-  const [qtyPickerRow, setQtyPickerRow] = useState(-1);
-  // 金額數字鍵顯示在哪一列(規則同數量:點一下累加在尾端)
-  const [amountPickerRow, setAmountPickerRow] = useState(-1);
+  // 快選 chips 目前開在哪一列哪個欄位:null 或 { row, field: "unit"|"qty"|"amount" }
+  // (iOS 的原生 datalist 幾乎不會出現,改用自訂按鈕;焦點只會在一個欄位,不會同時開兩組)
+  const [picker, setPicker] = useState(null);
+  // 收合動畫進行中仍要 render 上一組 chips,內容才不會在滑上去之前先消失
+  const lastPickerRef = useRef(null);
+  if (picker) lastPickerRef.current = picker;
   const [submitError, setSubmitError] = useState("");
   const [saving, setSaving] = useState(false);
   const [lastOrder, setLastOrder] = useState(null); // 選定客戶的上一筆訂單
@@ -263,6 +263,18 @@ export default function OrderForm({ initial = null }) {
 
   function updateItem(i, field, value) {
     setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+  }
+
+  function openPicker(i, field) {
+    setPicker({ row: i, field });
+  }
+
+  // blur 後延遲收合(和客戶下拉同一套 150ms,避免和 chips 的 pointerdown 打架);
+  // 若期間焦點已移到別的欄位開了新 picker,就不要蓋掉它
+  function closePickerOnBlur(i, field) {
+    setTimeout(() => {
+      setPicker((cur) => (cur && cur.row === i && cur.field === field ? null : cur));
+    }, 150);
   }
 
   // 數量/金額共用的快選數字鍵:點一下累加在尾端,「0」開頭時換成新數字避免 03
@@ -544,8 +556,17 @@ export default function OrderForm({ initial = null }) {
 
       <div className="field">
         <span className="field-label">{t("form.items")}</span>
-        {items.map((row, i) => (
-          <div className="item-row" key={i}>
+        {items.map((row, i) => {
+          // 這一列目前展開的 picker;收合動畫期間改拿最後一次開過的,內容才不會瞬間消失
+          const isOpen = !!(picker && picker.row === i);
+          const shown = isOpen
+            ? picker
+            : lastPickerRef.current && lastPickerRef.current.row === i
+              ? lastPickerRef.current
+              : null;
+          return (
+          <div className="item-card" key={i}>
+          <div className="item-row">
             <input
               className="input item-row-name"
               placeholder={t("form.name")}
@@ -563,11 +584,9 @@ export default function OrderForm({ initial = null }) {
               aria-label={t("form.ariaQty", { i: i + 1 })}
               value={row.qty}
               onChange={(e) => updateItem(i, "qty", e.target.value)}
-              onFocus={() => setQtyPickerRow(i)}
-              onClick={() => setQtyPickerRow(i)}
-              onBlur={() =>
-                setTimeout(() => setQtyPickerRow((cur) => (cur === i ? -1 : cur)), 150)
-              }
+              onFocus={() => openPicker(i, "qty")}
+              onClick={() => openPicker(i, "qty")}
+              onBlur={() => closePickerOnBlur(i, "qty")}
             />
             <input
               className="input item-row-unit"
@@ -575,11 +594,9 @@ export default function OrderForm({ initial = null }) {
               aria-label={t("form.ariaUnit", { i: i + 1 })}
               value={row.unit}
               onChange={(e) => updateItem(i, "unit", e.target.value)}
-              onFocus={() => setUnitPickerRow(i)}
-              onClick={() => setUnitPickerRow(i)}
-              onBlur={() =>
-                setTimeout(() => setUnitPickerRow((cur) => (cur === i ? -1 : cur)), 150)
-              }
+              onFocus={() => openPicker(i, "unit")}
+              onClick={() => openPicker(i, "unit")}
+              onBlur={() => closePickerOnBlur(i, "unit")}
             />
             <input
               className="input item-row-price"
@@ -591,11 +608,9 @@ export default function OrderForm({ initial = null }) {
               aria-label={t("form.ariaAmount", { i: i + 1 })}
               value={row.amount}
               onChange={(e) => updateItem(i, "amount", e.target.value)}
-              onFocus={() => setAmountPickerRow(i)}
-              onClick={() => setAmountPickerRow(i)}
-              onBlur={() =>
-                setTimeout(() => setAmountPickerRow((cur) => (cur === i ? -1 : cur)), 150)
-              }
+              onFocus={() => openPicker(i, "amount")}
+              onClick={() => openPicker(i, "amount")}
+              onBlur={() => closePickerOnBlur(i, "amount")}
             />
             <button
               type="button"
@@ -609,7 +624,9 @@ export default function OrderForm({ initial = null }) {
                 <path d="m6 6 12 12" />
               </svg>
             </button>
-            {unitPickerRow === i && (
+          </div>
+          <div className={isOpen ? "chip-reveal chip-reveal-open" : "chip-reveal"}>
+            {shown && shown.field === "unit" && (
               <div className="unit-chips">
                 {COMMON_UNITS.map((u) => (
                   <button
@@ -619,7 +636,7 @@ export default function OrderForm({ initial = null }) {
                     onPointerDown={(e) => {
                       e.preventDefault(); // 搶在 input blur 之前填入,鍵盤不縮
                       updateItem(i, "unit", u);
-                      setUnitPickerRow(-1);
+                      setPicker(null);
                     }}
                   >
                     {u}
@@ -627,10 +644,11 @@ export default function OrderForm({ initial = null }) {
                 ))}
               </div>
             )}
-            {qtyPickerRow === i && digitPad(i, "qty", row.qty)}
-            {amountPickerRow === i && digitPad(i, "amount", row.amount)}
+            {shown && shown.field !== "unit" && digitPad(i, shown.field, row[shown.field])}
           </div>
-        ))}
+          </div>
+          );
+        })}
         {errors.items && <p className="field-error">{t(errors.items)}</p>}
         <button type="button" className="btn btn-ghost btn-block" onClick={addItem}>
           {`+ ${t("form.addItem")}`}
