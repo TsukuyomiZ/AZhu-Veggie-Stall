@@ -26,7 +26,9 @@ function tomorrowLocal() {
 }
 
 function emptyRow() {
-  return { name: "", qty: "", unit: "", amount: "", prepared: false };
+  // amountAuto = 內部旗標:這一列的金額是不是價目表自動算的(不會送到伺服器,
+  // handleSubmit 的 body 逐欄位挑,不含這個欄位)
+  return { name: "", qty: "", unit: "", amount: "", prepared: false, amountAuto: false };
 }
 
 // "2026-07-21" → zh "7/21" / vi "21/7"(月日順序走字典)
@@ -68,12 +70,42 @@ function mergeParsedItems(prev, parsed) {
         name,
         qty: it.qty ? String(it.qty) : "",
         unit,
-        amount: "", // 金額訊息裡通常沒有,由人補
+        amount: "", // 金額訊息裡通常沒有,由人補(或由價目表自動帶入)
         prepared: false,
+        amountAuto: false,
       });
     }
   }
   return rows.length > 0 ? rows : [emptyRow()];
+}
+
+// 價目表自動帶入規則(純函式:吃一列 + priceMap,回新列;不改原物件)。
+// - 品名匹配且單位為空 → 帶入價目表單位(不覆蓋使用者填的)
+// - 品名匹配且數量有值,且「金額為空 或 金額是上次自動算的(amountAuto)」
+//   → 金額 = Math.round(數量 × 單價),並標記 amountAuto = true
+// - 金額是自動算的但已算不出來(數量清空/品名不再匹配)→ 清空金額;
+//   品名不匹配時連旗標一起清
+// - 使用者手動改過金額(amountAuto = false 且金額非空)→ 永遠不動它
+function applyPriceRule(row, priceMap) {
+  if (!priceMap) return row; // 價目表沒載到 → 停用自動帶入,不影響開單
+  const hit = priceMap.get(row.name.trim());
+  if (!hit) {
+    if (row.amountAuto) return { ...row, amount: "", amountAuto: false };
+    return row;
+  }
+  const next = { ...row };
+  if (!next.unit.trim() && hit.unit) next.unit = hit.unit;
+  const qty = Number(next.qty);
+  const canAuto = String(next.amount).trim() === "" || next.amountAuto === true;
+  if (canAuto) {
+    if (String(next.qty).trim() !== "" && Number.isFinite(qty) && qty > 0 && Number.isFinite(hit.price)) {
+      next.amount = String(Math.round(qty * hit.price));
+      next.amountAuto = true;
+    } else if (next.amountAuto) {
+      next.amount = ""; // 數量清掉了,自動算的金額跟著清(旗標留著,補回數量會再算)
+    }
+  }
+  return next;
 }
 
 function toRow(item) {
@@ -83,6 +115,7 @@ function toRow(item) {
     unit: item.unit || "",
     amount: item.amount === 0 || item.amount == null ? "" : String(item.amount),
     prepared: !!item.prepared, // 保留原本的備貨狀態,新列為 false
+    amountAuto: false, // 既有訂單的金額是存過的,不能被價目表自動覆蓋
   };
 }
 
@@ -122,6 +155,32 @@ export default function OrderForm({ initial = null }) {
   const [submitError, setSubmitError] = useState("");
   const [saving, setSaving] = useState(false);
   const [lastOrder, setLastOrder] = useState(null); // 選定客戶的上一筆訂單
+  // 價目表:name.trim() → { unit, price }。null = 還沒載到/載入失敗 → 停用自動帶入
+  const [priceMap, setPriceMap] = useState(null);
+
+  // mount 撈一次價目表;撈失敗就靜默停用自動帶入,不影響開單
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/prices")
+      .then((res) => {
+        if (!res.ok) throw new Error("bad status");
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled || !Array.isArray(data)) return;
+        const map = new Map();
+        for (const p of data) {
+          const name = p && p.name != null ? String(p.name).trim() : "";
+          if (!name) continue;
+          map.set(name, { unit: p.unit != null ? String(p.unit).trim() : "", price: Number(p.price) });
+        }
+        setPriceMap(map);
+      })
+      .catch(() => {}); // 靜默:priceMap 維持 null,applyPriceRule 直接跳過
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 新增模式下，選了客戶就撈他最近一筆訂單，供一鍵帶入
   useEffect(() => {
@@ -246,7 +305,9 @@ export default function OrderForm({ initial = null }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "ai.parseFailed");
 
-      setItems((prev) => mergeParsedItems(prev, data.items));
+      // 合併後套價目表規則:金額為空(或原本就是自動算的)且品名匹配、有數量
+      // → 自動帶入金額;使用者手動填過金額的列不會被動到(mergeParsedItems 保留原值)
+      setItems((prev) => mergeParsedItems(prev, data.items).map((row) => applyPriceRule(row, priceMap)));
 
       if (data.date) {
         setDate(data.date);
@@ -262,7 +323,22 @@ export default function OrderForm({ initial = null }) {
   }
 
   function updateItem(i, field, value) {
-    setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+    setItems((prev) =>
+      prev.map((row, idx) => {
+        if (idx !== i) return row;
+        const next = { ...row, [field]: value };
+        // 使用者直接改金額(含金額數字快選鍵)→ 之後這一列不再自動覆蓋
+        if (field === "amount") {
+          next.amountAuto = false;
+          return next;
+        }
+        // 改品名/數量(含數量數字快選鍵)→ 套價目表自動帶入規則
+        if (field === "name" || field === "qty") {
+          return applyPriceRule(next, priceMap);
+        }
+        return next;
+      })
+    );
   }
 
   function openPicker(i, field) {

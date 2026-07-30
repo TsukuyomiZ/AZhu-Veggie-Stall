@@ -27,6 +27,36 @@ function addDaysStr(todayStr, n) {
   return `${yy}-${mm}-${dd}`;
 }
 
+const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+
+// "2026-07-31" → "7/31(明天)"、"8/2(星期六)" — LINE 回覆裡給家人看的日期
+function friendlyDate(dateStr, today) {
+  const parts = (dateStr || "").split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return dateStr || "";
+  const label = `${parts[1]}/${parts[2]}`;
+  if (dateStr === today) return `${label}(今天)`;
+  if (dateStr === addDaysStr(today, 1)) return `${label}(明天)`;
+  if (dateStr === addDaysStr(today, 2)) return `${label}(後天)`;
+  const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  return `${label}(星期${WEEKDAYS[d.getUTCDay()]})`;
+}
+
+// 建單成功的回覆:逐行列出解析到的品項 + 要貨日,家人不用開網站就能核對 AI 有沒有看懂
+function buildOrderSummary(items, dateStr, today) {
+  const MAX_LINES = 15; // 訂單極少超過,防呆避免超長訊息
+  const lines = items.slice(0, MAX_LINES).map((i) => {
+    if (i.qty) return `・${i.name} × ${i.qty}${i.unit || ""}`;
+    return i.unit ? `・${i.name}(${i.unit})` : `・${i.name}`;
+  });
+  if (items.length > MAX_LINES) lines.push(`…等共 ${items.length} 項`);
+  return [
+    "✅ 已收到訂單(待確認)",
+    ...lines,
+    `要貨日:${friendlyDate(dateStr, today)}`,
+    "請到網站確認客戶與金額",
+  ].join("\n");
+}
+
 // 驗證 LINE 簽章：x-line-signature = HMAC-SHA256(channel secret, raw body) 的 base64
 function verifySignature(rawBody, signature, channelSecret) {
   if (!signature) return false;
@@ -149,13 +179,15 @@ export async function POST(req) {
       parseFailed = true;
     }
 
+    // 沒解析到日期就預設明天（與訂單表單的預設一致）;回覆摘要也要用同一個日期
+    const orderDate = (parsed && parsed.date) || addDaysStr(today, 1);
+
     // 建「待確認」訂單：沒有客戶、沒有金額，家人之後在網站上補
     try {
       await db.collection("orders").insertOne({
         customerId: null,
         customerName: "",
-        // 沒解析到日期就預設明天（與訂單表單的預設一致）
-        date: (parsed && parsed.date) || addDaysStr(today, 1),
+        date: orderDate,
         total: 0,
         status: "pending",
         source: "line",
@@ -183,7 +215,7 @@ export async function POST(req) {
         event.replyToken,
         parseFailed
           ? "⚠️ 已收到訊息，AI 暫時忙碌，已先存成待確認訂單，品項請到網站對照訊息補上"
-          : `✅ 已建立待確認訂單（${parsed.items.length} 項），請到網站補客戶與金額`,
+          : buildOrderSummary(parsed.items, orderDate, today),
         accessToken
       );
     }

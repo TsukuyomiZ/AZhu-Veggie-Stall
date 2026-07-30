@@ -41,13 +41,15 @@
   // LINE 自動收單的訂單才有以下欄位;沒有 status 欄位 = 已確認(舊單),
   // 所以查詢一律用 status: { $ne: "pending" } 而非 $eq: "confirmed"
   status: "pending"|"confirmed", source: "line", sourceText, lineEventId }
+// prices — 品項價目表(2026-07-30)。name 全表唯一(應用層查重,尚無 unique index,見待辦)
+{ _id, name(必填), unit, price(Number ≥0), createdAt, updatedAt }
 ```
 
 ## 登入與權限(擋在 API 層,lib/auth.js)
 
 - 一組共用密碼 → httpOnly cookie(HMAC of APP_PASSWORD,半年效期,換密碼=全裝置登出)
 - **訪客(未登入)只能**:看今日備貨頁 = `GET /api/orders?date=`(必須帶 date)+ `PATCH /api/orders/:id`(勾備貨)
-- 其他 API 全部 401;頁面用 `components/RequireAuth.js` 包在 `app/{orders,customers,stats}/layout.js`
+- 其他 API 全部 401;頁面用 `components/RequireAuth.js` 包在 `app/{orders,customers,stats,prices}/layout.js`
 - BottomNav 依登入狀態切換(訪客只見「今日備貨+登入」;登入後五個 tab)
 
 ## 頁面與功能(全部已完成並實測)
@@ -58,11 +60,12 @@
 | `/orders` | 訂單列表:按日期分組、今天/明天 badge、備貨進度 badge、編輯/刪除/匯出 |
 | `/orders/new`、`/orders/[id]/edit` | 共用 `components/OrderForm.js`(重點見下) |
 | `/orders/[id]/receipt` | 單據:Canvas 畫成 PNG 圖(3x 解析度)→ Web Share API 分享(LINE)/下載;不支援分享自動退為下載。**沒有 PDF**(已改掉) |
-| `/customers` | 客戶 CRUD + **批次匯入**(貼名單一行一人,自動辨識電話/車牌/地址,同名標「已存在」跳過) |
+| `/customers` | 客戶 CRUD + **批次匯入**(貼名單一行一人,自動辨識電話/車牌/地址,同名標「已存在」跳過);頁首有「價目表」入口 |
+| `/prices` | 品項價目表 CRUD + **批次匯入**(一行一項:「高麗菜 50」「高麗菜 斤 50」,價錢容忍 元/塊/NT$/$ 前後綴;同名標「已存在」、解析不出標「無法辨識」跳過)。字典 `lib/i18n/dict-prices.js` |
 | `/stats` | 銷量統計:週(週一起)/月/季切換、MongoDB aggregation(`/api/stats`)、摘要卡+重點列表(stat-line)、SVG 長條圖(點擊看明細)、品項/客戶排行 |
 | `/login` | 登入/登出 + 「不登入只看今日備貨」 |
 
-**OrderForm 重點**:客戶可搜尋下拉(姓名/電話/車牌過濾,pointerdown 選取,找不到可「＋直接新增」快速建客戶)、日期預設明天、「帶入上次訂單」提示卡(`GET /api/orders?customerId=&limit=1`)、品項列兩行網格排版(卡片式)、自動總計、**AI 解析框**(見下)。
+**OrderForm 重點**:客戶可搜尋下拉(姓名/電話/車牌過濾,pointerdown 選取,找不到可「＋直接新增」快速建客戶)、日期預設明天、「帶入上次訂單」提示卡(`GET /api/orders?customerId=&limit=1`)、品項列兩行網格排版(卡片式 `.item-card`)、自動總計、**AI 解析框**(見下,解析結果**合併**進表單:同名且單位相容→數量相加,不覆蓋)、**快選 chips**(單位文字鈕;數量/金額數字鍵累加輸入,共用 digitPad,`.chip-reveal` 動畫展開,因 iOS datalist 不可靠)、**價目表自動帶入**(mount 撈 `/api/prices` 一次,品名精確匹配+數量>0 → 金額=Math.round(qty×price),`amountAuto` 旗標保護手動金額;單位空白才帶入;編輯既有訂單/帶入上次訂單永不自動覆蓋;載入失敗靜默停用)。
 
 ## AI 解析訂單(Gemini)
 
@@ -81,6 +84,7 @@
 流程:家人把客人訊息轉傳到 LINE OA → `app/api/line/webhook/route.js` → 共用 `lib/parse-order-text.js`(Gemini)解析 → 建「待確認」訂單(無客戶、金額 0)→ 家人在 /orders 置頂的待確認區塊點「確認訂單」→ 編輯頁看原始訊息、選客戶、補金額 → 確認轉正。
 
 - **簽章驗證**:`x-line-signature` = HMAC-SHA256(channel secret, raw body) base64;要用 `req.text()` 拿 raw body,timingSafeEqual 比對。訪客/cookie 邏輯不適用這條 route
+- **回覆摘要**(2026-07-30):建單成功回逐行品項摘要(`・高麗菜 × 2顆`)+ 要貨日(`7/31(明天)`,今天/明天/後天之外顯示星期),超過 15 項截斷顯示「…等共 N 項」;解析失敗仍回「AI 暫時忙碌」訊息。家人不用開網站就能核對 AI 解析結果
 - **去重**:訂單存 `lineEventId`(LINE 的 webhookEventId),重送時查到同 id 就跳過。**不可**看到 isRedelivery 一律跳過(上一批可能超時只處理一半,沒處理到的只會出現在重送裡)
 - **不丟單原則**:Gemini 掛掉(429/連線失敗)→ 建一張 items 為空、只有 sourceText 的待確認單,家人手動補;只有「解析不出品項」(閒聊貼圖)才靜默跳過
 - **時區**:webhook 沒有前端帶 today,用台灣時區手算(`Date.now()+8h` 後取 getUTC*,台灣無日光節約)
@@ -112,9 +116,9 @@
 ## 待辦/未來方向(使用者提過但未做)
 
 1. ~~LINE 官方帳號 + webhook 全自動收單~~(**已完成**,見上方專章;剩使用者端的 LINE Developers 設定)
-2. 語音輸入訂單(Web Speech API → 共用 parse-order)
+2. 語音輸入:已決定**不做** Web Speech API(家人用 iOS 內建聽寫貼進 AI 解析框即可);若聽寫錯字率高或有台語需求,再評估「錄音直接丟 Gemini 多模態」
 3. 統計頁前後期切換(目前只能看本週/本月/本季)
-4. Code review 剩餘 MINOR 未收:刪客戶不警告孤兒訂單、品項列 key 用 index、備貨頁勾選時群組即時重排、編輯訂單會蓋掉編輯期間的備貨勾選
-5. PWA manifest(加到主畫面像 app)
+4. Code review 剩餘 MINOR 未收:刪客戶不警告孤兒訂單、品項列 key 用 index、備貨頁勾選時群組即時重排、編輯訂單會蓋掉編輯期間的備貨勾選;價目表:`prices.name` 建 unique index 防併發重複(目前僅應用層 409)、自動帶價只看品名不看單位(單位不同會套錯價)、同名不同單位只能存一筆
+5. PWA 階段一:manifest + icon + iOS appleWebApp metadata(加到主畫面像 app);**不做 Service Worker**(快取舊版風險大於離線頁收益)
 6. Atlas 密碼曾在對話中曝光過,建議使用者換掉(已提醒過)
-7. 品項單價表(AI 解析後自動帶金額)— 討論過未做
+7. ~~品項單價表(AI 解析後自動帶金額)~~(**已完成** 2026-07-30,見 `/prices` 與 OrderForm 重點)
