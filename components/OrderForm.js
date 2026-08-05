@@ -26,9 +26,10 @@ function tomorrowLocal() {
 }
 
 function emptyRow() {
-  // amountAuto = 內部旗標:這一列的金額是不是價目表自動算的(不會送到伺服器,
-  // handleSubmit 的 body 逐欄位挑,不含這個欄位)
-  return { name: "", qty: "", unit: "", amount: "", prepared: false, amountAuto: false };
+  // price = 單價(會存進 DB);amount = 單品總額(= 數量 × 單價,可手動改)。
+  // priceAuto / amountAuto = 內部旗標:值是不是自動帶入/自動算的
+  // (不會送到伺服器,handleSubmit 的 body 逐欄位挑,不含這兩個欄位)
+  return { name: "", qty: "", unit: "", price: "", amount: "", prepared: false, priceAuto: false, amountAuto: false };
 }
 
 // "2026-07-21" → zh "7/21" / vi "21/7"(月日順序走字典)
@@ -70,8 +71,10 @@ function mergeParsedItems(prev, parsed) {
         name,
         qty: it.qty ? String(it.qty) : "",
         unit,
-        amount: "", // 金額訊息裡通常沒有,由人補(或由價目表自動帶入)
+        price: "", // 單價訊息裡通常沒有,由價目表自動帶入或人補
+        amount: "",
         prepared: false,
+        priceAuto: false,
         amountAuto: false,
       });
     }
@@ -79,33 +82,50 @@ function mergeParsedItems(prev, parsed) {
   return rows.length > 0 ? rows : [emptyRow()];
 }
 
-// 價目表自動帶入規則(純函式:吃一列 + priceMap,回新列;不改原物件)。
-// - 品名匹配且單位為空 → 帶入價目表單位(不覆蓋使用者填的)
-// - 品名匹配且數量有值,且「金額為空 或 金額是上次自動算的(amountAuto)」
-//   → 金額 = Math.round(數量 × 單價),並標記 amountAuto = true
-// - 金額是自動算的但已算不出來(數量清空/品名不再匹配)→ 清空金額;
-//   品名不匹配時連旗標一起清
-// - 使用者手動改過金額(amountAuto = false 且金額非空)→ 永遠不動它
-function applyPriceRule(row, priceMap) {
-  if (!priceMap) return row; // 價目表沒載到 → 停用自動帶入,不影響開單
-  const hit = priceMap.get(row.name.trim());
-  if (!hit) {
-    if (row.amountAuto) return { ...row, amount: "", amountAuto: false };
-    return row;
-  }
+// 單品總額 = 數量 × 單價(純函式)。
+// - 只動「還是空的 或 上次是自動算的(amountAuto)」的金額;
+//   使用者手動改過單品總額(amountAuto = false 且非空)→ 永遠不動它(可打折湊整)
+// - 數量或單價清空後,原本自動算的總額跟著清(旗標留著,補回來會再算)
+function recalcAmount(row) {
   const next = { ...row };
-  if (!next.unit.trim() && hit.unit) next.unit = hit.unit;
-  const qty = Number(next.qty);
   const canAuto = String(next.amount).trim() === "" || next.amountAuto === true;
-  if (canAuto) {
-    if (String(next.qty).trim() !== "" && Number.isFinite(qty) && qty > 0 && Number.isFinite(hit.price)) {
-      next.amount = String(Math.round(qty * hit.price));
-      next.amountAuto = true;
-    } else if (next.amountAuto) {
-      next.amount = ""; // 數量清掉了,自動算的金額跟著清(旗標留著,補回數量會再算)
-    }
+  if (!canAuto) return next;
+  const qty = Number(next.qty);
+  const price = Number(next.price);
+  if (
+    String(next.qty).trim() !== "" && Number.isFinite(qty) && qty > 0 &&
+    String(next.price).trim() !== "" && Number.isFinite(price) && price >= 0
+  ) {
+    next.amount = String(Math.round(qty * price));
+    next.amountAuto = true;
+  } else if (next.amountAuto) {
+    next.amount = "";
   }
   return next;
+}
+
+// 價目表自動帶入規則(純函式:吃一列 + priceMap,回新列;不改原物件)。
+// - 品名匹配且單位為空 → 帶入價目表單位(不覆蓋使用者填的)
+// - 品名匹配且「單價為空 或 單價是上次自動帶的(priceAuto)」→ 帶入價目表單價
+// - 品名不再匹配 → 自動帶的單價清掉;手動填的單價永遠不動
+// - 最後一律重算單品總額(recalcAmount 自己會尊重手動改過的金額)
+function applyPriceRule(row, priceMap) {
+  let next = { ...row };
+  if (priceMap) {
+    const hit = priceMap.get(next.name.trim());
+    if (hit) {
+      if (!next.unit.trim() && hit.unit) next.unit = hit.unit;
+      const canAutoPrice = String(next.price).trim() === "" || next.priceAuto === true;
+      if (canAutoPrice && Number.isFinite(hit.price)) {
+        next.price = String(hit.price);
+        next.priceAuto = true;
+      }
+    } else if (next.priceAuto) {
+      next.price = "";
+      next.priceAuto = false;
+    }
+  }
+  return recalcAmount(next);
 }
 
 function toRow(item) {
@@ -113,9 +133,12 @@ function toRow(item) {
     name: item.name || "",
     qty: item.qty === 0 || item.qty == null ? "" : String(item.qty),
     unit: item.unit || "",
+    // 舊訂單沒存單價 → 留空(單品總額仍顯示原本存的金額,不會變)
+    price: item.price === 0 || item.price == null ? "" : String(item.price),
     amount: item.amount === 0 || item.amount == null ? "" : String(item.amount),
     prepared: !!item.prepared, // 保留原本的備貨狀態,新列為 false
-    amountAuto: false, // 既有訂單的金額是存過的,不能被價目表自動覆蓋
+    priceAuto: false, // 既有訂單的值是存過的,不能被價目表自動覆蓋
+    amountAuto: false,
   };
 }
 
@@ -207,7 +230,7 @@ export default function OrderForm({ initial = null }) {
 
   function applyLastOrder() {
     if (!lastOrder) return;
-    const hasInput = items.some((row) => row.name.trim() || row.qty || row.amount);
+    const hasInput = items.some((row) => row.name.trim() || row.qty || row.price || row.amount);
     if (hasInput && !window.confirm(t("form.overwriteLastOrder"))) {
       return;
     }
@@ -327,12 +350,17 @@ export default function OrderForm({ initial = null }) {
       prev.map((row, idx) => {
         if (idx !== i) return row;
         const next = { ...row, [field]: value };
-        // 使用者直接改金額(含金額數字快選鍵)→ 之後這一列不再自動覆蓋
+        // 使用者直接改單品總額(含數字快選鍵)→ 之後這一列的總額不再自動覆蓋
         if (field === "amount") {
           next.amountAuto = false;
           return next;
         }
-        // 改品名/數量(含數量數字快選鍵)→ 套價目表自動帶入規則
+        // 使用者直接改單價 → 單價不再被價目表覆蓋,並重算單品總額
+        if (field === "price") {
+          next.priceAuto = false;
+          return recalcAmount(next);
+        }
+        // 改品名/數量(含數量數字快選鍵)→ 套價目表自動帶入規則(內含重算總額)
         if (field === "name" || field === "qty") {
           return applyPriceRule(next, priceMap);
         }
@@ -434,7 +462,8 @@ export default function OrderForm({ initial = null }) {
         name: row.name.trim(),
         qty: Number(row.qty) || 0, // 空白視為 0
         unit: row.unit.trim(),
-        amount: Number(row.amount) || 0, // 空白視為 0
+        price: Number(row.price) || 0, // 單價,空白視為 0
+        amount: Number(row.amount) || 0, // 單品總額,空白視為 0
         prepared: !!row.prepared,
       })),
     };
@@ -680,8 +709,22 @@ export default function OrderForm({ initial = null }) {
               inputMode="numeric"
               min="0"
               step="any"
-              placeholder={t("form.amount")}
-              aria-label={t("form.ariaAmount", { i: i + 1 })}
+              placeholder={t("form.price")}
+              aria-label={t("form.ariaPrice", { i: i + 1 })}
+              value={row.price}
+              onChange={(e) => updateItem(i, "price", e.target.value)}
+              onFocus={() => openPicker(i, "price")}
+              onClick={() => openPicker(i, "price")}
+              onBlur={() => closePickerOnBlur(i, "price")}
+            />
+            <input
+              className="input item-row-subtotal"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="any"
+              placeholder={t("form.subtotal")}
+              aria-label={t("form.ariaSubtotal", { i: i + 1 })}
               value={row.amount}
               onChange={(e) => updateItem(i, "amount", e.target.value)}
               onFocus={() => openPicker(i, "amount")}

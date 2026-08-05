@@ -9,6 +9,7 @@ function normalizeItems(items) {
       name: (i.name || "").trim(),
       qty: Number(i.qty) || 0,
       unit: (i.unit || "").trim(),
+      price: Number(i.price) || 0, // 單價;amount(單品總額)仍是 total 的計算來源
       amount: Number(i.amount) || 0,
       prepared: !!i.prepared,
     }));

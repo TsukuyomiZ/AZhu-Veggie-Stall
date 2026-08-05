@@ -37,7 +37,9 @@
 { _id, name(必填), phone, plate(車牌,自動大寫), address, note, createdAt }
 // orders — date 是「要貨日期」字串 YYYY-MM-DD(本地時區,嚴禁 toISOString)
 { _id, customerId, customerName, date, total,
-  items: [{ name, qty, unit, amount, prepared }], createdAt,
+  // price = 單價(2026-08-05 加;舊單沒有,單據頁會用 amount÷qty 回推)
+  // amount = 單品總額(= qty × price 自動算,可手動改;total 與統計的計算來源)
+  items: [{ name, qty, unit, price, amount, prepared }], createdAt,
   // LINE 自動收單的訂單才有以下欄位;沒有 status 欄位 = 已確認(舊單),
   // 所以查詢一律用 status: { $ne: "pending" } 而非 $eq: "confirmed"
   status: "pending"|"confirmed", source: "line", sourceText, lineEventId }

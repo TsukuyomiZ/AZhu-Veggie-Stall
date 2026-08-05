@@ -22,12 +22,18 @@ function formatMoney(n) {
   return `NT$ ${(Number(n) || 0).toLocaleString()}`;
 }
 
-// 單價 = 金額 ÷ 數量,最多一位小數;缺數量或金額顯示「—」
+// 單價:訂單有存就直接用;舊訂單沒存 → 金額 ÷ 數量回推,最多一位小數。
+// 呈現為「30 / 斤」;沒有單位就純數字;都算不出來顯示「—」
 function unitPriceText(item) {
+  const price = Number(item.price);
   const qty = Number(item.qty);
   const amount = Number(item.amount);
-  if (!qty || !amount) return "—";
-  return (Math.round((amount / qty) * 10) / 10).toLocaleString();
+  let value = null;
+  if (price > 0) value = price;
+  else if (qty && amount) value = Math.round((amount / qty) * 10) / 10;
+  if (value == null) return "—";
+  const unit = (item.unit || "").trim();
+  return unit ? `${value.toLocaleString()} / ${unit}` : value.toLocaleString();
 }
 
 // 過長文字裁切成「…」，避免超出畫布
@@ -118,7 +124,7 @@ function drawReceipt(order) {
   y += 32;
   const amountRight = W - P; // 金額欄右緣
   const unitRight = amountRight - 84; // 單價欄右緣
-  const qtyRight = unitRight - 58; // 數量欄右緣
+  const qtyRight = unitRight - 74; // 數量欄右緣(單價現在含單位「30 / 斤」,留寬一點)
   ctx.fillStyle = muted;
   ctx.font = `700 12px ${FONT}`;
   ctx.textAlign = "left";
